@@ -1,0 +1,22 @@
+﻿<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{F8B87450-B0FB-40D4-904C-E5604D9EF40F}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>統合ネームラベル</AssemblyName>
+    <RootNamespace>UnifiedLabels</RootNamespace>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <OutputPath>bin\$(Configuration)\</OutputPath>
+    <AppConfig>App.config</AppConfig>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" /><Reference Include="System.Xml" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="DotNetBarcode"><HintPath>..\DotNetBarcode.dll</HintPath><Private>True</Private></Reference>
+    <Compile Include="Program.cs" /><Compile Include="UserFeatures.cs" /><Compile Include="CatalogVerification.cs" /><Compile Include="LabelCatalog.cs" /><Compile Include="AdditionalCatalog.cs" />
+    <None Include="App.config" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>
