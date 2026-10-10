@@ -126,7 +126,26 @@ namespace UnifiedLabels
         readonly ComboBox digits = new ComboBox();
         readonly ComboBox customers = new ComboBox(), formats = new ComboBox();
         bool selecting;
-        int SelectedCustomerIndex { get { return Array.IndexOf(LabelCatalog.Customers,customers.Text); } set { customers.SelectedItem=value<0?null:LabelCatalog.Customers[value]; } }
+        /// <summary>顧客コンボの項目を query で絞り込み（空なら全件）。入力中の文字とキャレットを維持する。</summary>
+        void FillCustomerItems(string query) {
+            string typed=customers.Text; int caret=customers.SelectionStart;
+            bool prev=selecting; selecting=true;
+            customers.BeginUpdate();
+            customers.Items.Clear();
+            foreach(string n in LabelCatalog.SortedCustomers())
+                if(UserSettings.Matches(n,query)) customers.Items.Add(n);
+            customers.EndUpdate();
+            customers.Text=typed;
+            if(caret>=0 && caret<=typed.Length) customers.SelectionStart=caret;
+            selecting=prev;
+        }
+        int SelectedCustomerIndex {
+            get { return Array.IndexOf(LabelCatalog.Customers,customers.Text); }
+            set {
+                FillCustomerItems("");
+                customers.SelectedItem=value<0?null:LabelCatalog.Customers[value];
+            }
+        }
         readonly int[] lastFormats=new int[LabelCatalog.Customers.Length];
         readonly TextBox header = new TextBox(), role = new TextBox(), person = new TextBox(), number = new TextBox();
         readonly Label headerLabel = new Label(), roleLabel = new Label(), status = new Label(), guide = new Label();
@@ -163,9 +182,11 @@ public MainForm(string settingsFile)
             search.Click+=delegate {using(CustomerPicker dlg=new CustomerPicker(preferences)) if(dlg.ShowDialog(this)==DialogResult.OK) SelectedCustomerIndex=dlg.SelectedCustomer; favorite.Text=preferences.Favorites.Contains(customers.Text)?"★":"☆";};
             favorite.Click+=delegate {Safe(delegate {preferences.Toggle(customers.Text);favorite.Text=preferences.Favorites.Contains(customers.Text)?"★":"☆";});};
             generic.Click+=delegate {using(GenericLabelForm dlg=new GenericLabelForm(preferences)) dlg.ShowDialog(this); UpdatePreview();};
-            customers.DropDownStyle=formats.DropDownStyle=ComboBoxStyle.DropDownList;
-            customers.Items.AddRange(LabelCatalog.SortedCustomers());
-            customers.AutoCompleteSource=AutoCompleteSource.ListItems; customers.AutoCompleteMode=AutoCompleteMode.SuggestAppend;
+            // メイン顧客欄：DropDown で直接入力し、Matches（名前・読み）で候補を絞る（別ダイアログ不要）
+            formats.DropDownStyle=ComboBoxStyle.DropDownList;
+            customers.DropDownStyle=ComboBoxStyle.DropDown;
+            customers.AutoCompleteMode=AutoCompleteMode.None; customers.AutoCompleteSource=AutoCompleteSource.None;
+            FillCustomerItems("");
             customers.MaxDropDownItems=20; customers.IntegralHeight=false; customers.DropDownHeight=400;
             kinds.DropDownStyle = printers.DropDownStyle = papers.DropDownStyle = ComboBoxStyle.DropDownList;
             kinds.Items.AddRange(LabelRenderer.Titles);
@@ -214,6 +235,37 @@ public MainForm(string settingsFile)
                 int[] ids=LabelCatalog.ForCustomer(SelectedCustomerIndex);
                 kinds.SelectedIndex=ids[lastFormats[SelectedCustomerIndex]];
                 Safe(delegate {preferences.Visit(customers.Text);});
+            };
+            // 打ち込み中：ドロップダウン候補を一致顧客だけに更新（読み・全半角可）
+            customers.TextUpdate += delegate {
+                if(selecting) return;
+                string q=customers.Text;
+                FillCustomerItems(q);
+                if(q.Length==0 || customers.Items.Count==0) return;
+                try {
+                    string typed=customers.Text; int caret=customers.SelectionStart;
+                    selecting=true;
+                    if(!customers.DroppedDown) customers.DroppedDown=true;
+                    customers.Text=typed;
+                    if(caret>=0 && caret<=typed.Length) customers.SelectionStart=caret;
+                } catch { } finally { selecting=false; }
+            };
+            // クリック等で開いたとき、確定済み顧客なら全件を見せる（TextUpdate中は絞り込みを維持）
+            customers.DropDown += delegate {
+                if(selecting || SelectedCustomerIndex<0) return;
+                FillCustomerItems("");
+            };
+            // 未確定入力のままフォーカスが外れたら一致顧客へ寄せる（なければ現在形式の顧客へ戻す）
+            customers.Leave += delegate {
+                if(selecting) return;
+                int kept=SelectedCustomerIndex;
+                if(kept>=0) { FillCustomerItems(""); customers.SelectedItem=LabelCatalog.Customers[kept]; return; }
+                string typed=customers.Text; string match=null;
+                if(!string.IsNullOrEmpty(typed))
+                    foreach(string n in LabelCatalog.SortedCustomers())
+                        if(UserSettings.Matches(n,typed)) { match=n; break; }
+                if(match!=null) { FillCustomerItems(""); customers.SelectedItem=match; }
+                else if(active>=0) SelectedCustomerIndex=LabelCatalog.Items[active].Customer;
             };
             formats.SelectedIndexChanged += delegate {
                 if(selecting || SelectedCustomerIndex<0 || formats.SelectedIndex<0) return;
@@ -530,6 +582,13 @@ public MainForm(string settingsFile)
             UserSettings r=new UserSettings(testPath);
             if(!r.Favorites.Contains("よつ葉乳業")||r.Recent.Count!=2||r.Recent[0]!="だるま食品"||r.Get("printer-A|small").X!=1.2m||r.Get("printer-A|big").Y!=3||r.Get("printer-B|small").X!=0)throw new Exception("設定保存の検証失敗");
             if(!UserSettings.Matches("Umios Hokkaido 札幌工場","ＵＭＩＯＳ")||!UserSettings.Matches("よつ葉乳業","よつ葉")||!UserSettings.Matches("よつ葉乳業㈱十勝工場","よつば")||!UserSettings.Matches("よつ葉乳業㈱十勝工場","ヨツバ")||!UserSettings.Matches("Umios Hokkaido 札幌工場","うみおす")||UserSettings.Matches("だるま食品","存在しない"))throw new Exception("検索の検証失敗");
+            if(customers.DropDownStyle!=ComboBoxStyle.DropDown)throw new Exception("顧客欄が入力不可（DropDownList）のまま");
+            customers.Text="よつば";FillCustomerItems("よつば");
+            if(customers.Items.Count<1)throw new Exception("メイン顧客欄の読み絞り込み失敗");
+            foreach(object item in customers.Items)if(!UserSettings.Matches(item.ToString(),"よつば"))throw new Exception("メイン顧客欄に不一致が残った");
+            int narrowed=customers.Items.Count;customers.Text="よつ";FillCustomerItems("よつ");
+            if(customers.Items.Count<narrowed)throw new Exception("メイン顧客欄の入力中絞り込み失敗");
+            FillCustomerItems("");if(customers.Items.Count!=LabelCatalog.Customers.Length)throw new Exception("メイン顧客欄の全件復帰失敗");
             Show();person.Text="山田 太郎";number.Text="Y1234";UpdatePreview();Application.DoEvents();
             using(Bitmap b=new Bitmap(Width,Height)){DrawToBitmap(b,new Rectangle(Point.Empty,Size));b.Save(Path.Combine(folder,"main.png"));}
             using(CustomerPicker dlg=new CustomerPicker(r)){dlg.VerifyFilters();dlg.Show();Application.DoEvents();using(Bitmap b=new Bitmap(dlg.Width,dlg.Height)){dlg.DrawToBitmap(b,new Rectangle(Point.Empty,dlg.Size));b.Save(Path.Combine(folder,"customers.png"));}dlg.Close();}
@@ -540,7 +599,7 @@ public MainForm(string settingsFile)
             }
             kinds.SelectedIndex=1;person.Text="山田 太郎";number.Text="Y1234";
             using(OffsetDialog dlg=new OffsetDialog("プリンターごと・ラベル形式ごとに保存\r\nよつ葉乳業 ／ 大ネーム",new PrintOffset(.5m,-.3m),CreatePreview,delegate{throw new Exception("実印刷は禁止");},delegate{})){dlg.Show();Application.DoEvents();using(Bitmap b=new Bitmap(dlg.Width,dlg.Height)){dlg.DrawToBitmap(b,new Rectangle(Point.Empty,dlg.Size));b.Save(Path.Combine(folder,"adjustment.png"));}dlg.Close();}
-            File.WriteAllText(Path.Combine(folder,"features-verification.txt"),"検索・全半角英字・読み仮名・入力中絞り込み、設定再読込、お気に入り、最近の重複除去、プリンター・形式別の分離、5形式の調整表示・印刷描画を確認。実印刷なし。",Encoding.UTF8);Hide();
+            File.WriteAllText(Path.Combine(folder,"features-verification.txt"),"メイン顧客欄の入力絞り込み（読み・全半角）・検索ダイアログ・設定再読込・お気に入り・最近の重複除去・プリンター形式別分離・5形式の調整表示・印刷描画を確認。実印刷なし。",Encoding.UTF8);Hide();
         }
         public void Verify(string folder)
         {
