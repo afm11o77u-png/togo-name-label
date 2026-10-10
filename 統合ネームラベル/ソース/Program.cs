@@ -338,11 +338,12 @@ public MainForm(string settingsFile)
             proof.Click += delegate { if(Check()) Safe(delegate { using(PrintPreviewDialog dlg = new PrintPreviewDialog {Document=document,Width=1050,Height=760}) dlg.ShowDialog(this); }); };
             print.Click += delegate { if(Check()) Safe(delegate { print.Enabled=false; try { document.PrinterSettings.Copies=(short)copies.Value; document.Print(); status.Text="印刷データをプリンターへ送信しました。"; } finally { print.Enabled=true; } }); };
             document.PrintPage += PrintPage;
+            // 既に SelectedIndex==0 だと SelectedIndexChanged が飛ばず SwitchKind 未実行のまま起動することがある
             kinds.SelectedIndex=0;
+            if(active<0) SwitchKind();
             Safe(delegate { foreach(string p in PrinterSettings.InstalledPrinters) printers.Items.Add(p); SyncPrinter(true); });
             FormClosed += delegate { if(preview.Image!=null) preview.Image.Dispose(); if(sample.Image!=null) sample.Image.Dispose(); document.Dispose(); placementBold.Dispose(); };
             // 端ドラッグで拡大・縮小。下限は現行既定レイアウト（拡大後の縮小は可）。ダイアログは FixedDialog のまま。
-            MinimumSize = Size;
             preview.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             guide.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             status.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
@@ -355,6 +356,23 @@ public MainForm(string settingsFile)
             print.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             copies.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             copiesCaption.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            // Anchor 確定後にもう一度帯を積み、起動直後から緑／青帯を出す（main #26 取り込み後も再ビルド）
+            if(active>=0) UpdateNumberGuide();
+            MinimumSize = Size;
+            garmentSummary.BringToFront();
+            smallPlacement.BringToFront();
+            largePlacement.BringToFront();
+            // ハンドル作成後の DPI／レイアウト確定でも帯が消えないよう初回表示で再同期
+            bool startupPlacementSynced=false;
+            Shown += delegate {
+                if(startupPlacementSynced || active<0) return;
+                startupPlacementSynced=true;
+                UpdateNumberGuide();
+                MinimumSize=new Size(Math.Max(MinimumSize.Width,Size.Width),Math.Max(MinimumSize.Height,Size.Height));
+                garmentSummary.BringToFront();
+                smallPlacement.BringToFront();
+                largePlacement.BringToFront();
+            };
             Resize += delegate { RelayoutColorLegendWidths(); };
         }
         /// <summary>幅変更時に色凡例カードを二列で追従（Top 固定・Bottom アンカーは使わない）。</summary>
@@ -551,8 +569,9 @@ public MainForm(string settingsFile)
                 }
             }
             UpdateGarmentSummary();
-            EnsurePlacementBandStack();
             ResizePlacementGuides();
+            // 高さ確定後に同Y・重なりを矯正（Resize より前だと青帯が緑帯に隠れることがある）
+            EnsurePlacementBandStack();
         }
         /// <summary>複数形式の顧客だけ、貼り付け先帯の上に商品→大/小対応の色違い帯を出す。</summary>
         void UpdateGarmentSummary() {
@@ -797,6 +816,12 @@ public MainForm(string settingsFile)
             if(yotsubaBand.IndexOf("小ネーム（QR）")<0 || yotsubaBand.IndexOf("大ネーム（QR）")<0)throw new Exception("よつ葉緑帯にQR区別が出ない "+yotsubaBand);
             if(LabelCatalog.ShortFormName("大ネーム（パート2）")!="パート・帽子")throw new Exception("パート2の緑帯短縮がパート・帽子でない");
             if(LabelCatalog.ShortFormName("大ネーム（資格）")!="大ネーム（資格）")throw new Exception("資格の緑帯短縮が想定と違う");
+            // 起動直後（顧客・形式を触る前）: 初期選択の緑帯＋貼り付け先＋【選択中】
+            if(active!=0 || SelectedCustomerIndex!=0)throw new Exception("起動時の初期選択がよつ葉小ネームでない");
+            if(!garmentSummary.Visible || garmentSummary.Height<=0 || garmentSummary.Text.IndexOf("小ネーム（QR）")<0)throw new Exception("起動直後に商品対応帯が出ない");
+            if(!smallPlacement.Visible || smallPlacement.Text!="貼り付け先：黒下：左前" || smallPlacement.Height<=0)throw new Exception("起動直後に貼り付け先帯が出ない");
+            if(!largePlacement.Visible || largePlacement.Text.IndexOf("【選択中】")<0)throw new Exception("起動直後によつ葉の【選択中】行が出ない");
+            if(garmentSummary.Bottom>smallPlacement.Top || smallPlacement.Bottom>largePlacement.Top || largePlacement.Bottom>guide.Top)throw new Exception("起動直後の帯レイアウトが重なっている");
             SelectedCustomerIndex=76; Application.DoEvents();
             if(!garmentSummary.Visible || garmentSummary.Text!="白衣：大ネーム　白下：小ネーム")throw new Exception("十勝大福で商品対応帯が表示されない");
             if(!smallPlacement.Visible || smallPlacement.Text.IndexOf("貼り付け先：")!=0 || smallPlacement.Height<=0)throw new Exception("十勝大福で貼り付け先帯が出ない");
@@ -1068,6 +1093,10 @@ public MainForm(string settingsFile)
         int KindForRow(int row) { for(int k=0;k<LabelCatalog.Items.Length;k++) if(LabelCatalog.Items[k].PreviousSourceRow==row) return k; throw new Exception("旧登録のExcel行が見つかりません "+row); }
         public void VerifyLayoutUpdates(string folder) {
             Directory.CreateDirectory(folder); ShowInTaskbar=false; Opacity=0; Show(); Application.DoEvents();
+            // Shown 後も起動時の貼り付け先帯が残ること
+            if(active!=0 || !smallPlacement.Visible || smallPlacement.Text.IndexOf("貼り付け先：")!=0 || smallPlacement.Height<=0)throw new Exception("表示直後に貼り付け先帯が出ない");
+            if(!garmentSummary.Visible || garmentSummary.Height<=0)throw new Exception("表示直後に商品対応帯が出ない");
+            if(!largePlacement.Visible || largePlacement.Text.IndexOf("【選択中】")<0)throw new Exception("表示直後に【選択中】行が出ない");
             int initialHeight=ClientSize.Height;
             foreach(int row in new int[]{45,74,90,146,152,153,99,20,144,129}) {
                 kinds.SelectedIndex=KindForRow(row); LabelSpec spec=LabelCatalog.Items[active];

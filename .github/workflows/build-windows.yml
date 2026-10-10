@@ -31,6 +31,7 @@ on:
       - 'cursor/tokyo-space-note-f670'
       - 'cursor/form-placement-band-10fa'
       - 'cursor/excel-full-resync-28ae'
+      - 'cursor/startup-placement-be94'
       - 'cursor/umios-role-font-pt-903f'
     paths:
       - '.github/workflows/build-windows.yml'
@@ -75,3 +76,4 @@ jobs:
           }
           git commit -m "Rebuild 統合ネームラベル.exe on windows-latest (includes 汎用ラベル)"
           git push origin "HEAD:$env:GITHUB_REF_NAME"
+
