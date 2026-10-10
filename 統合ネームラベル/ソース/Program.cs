@@ -196,6 +196,21 @@ namespace UnifiedLabels
         readonly LabelData[] drafts = new LabelData[LabelCatalog.Items.Length];
         int active = -1;
         bool changing;
+        // 起動時レイアウトを基準に縮小スケール（拡大は従来どおり幅アンカー相当で追従）
+        const int MinClientWidth = 720, MinClientHeight = 540;
+        sealed class DesignSlot {
+            public Control Control;
+            public Rectangle Bounds;
+            public float FontPt;
+            public FontStyle Style;
+            public string Family;
+            public AnchorStyles Stretch;
+        }
+        readonly System.Collections.Generic.List<DesignSlot> designSlots = new System.Collections.Generic.List<DesignSlot>();
+        Size designClientSize;
+        float layoutScale = 1f;
+        bool layoutReady, mutatingDesign;
+        Size savedUserClient, savedDesignClient;
         static Label Caption(string s, int x, int y) { return new Label {Text=s,Left=x,Top=y,Width=300,Height=25}; }
         void Field(Control c, int x, int y, int width) { c.SetBounds(x,y,width,30); Controls.Add(c); }
         readonly UserSettings preferences;
@@ -343,7 +358,7 @@ public MainForm(string settingsFile)
             if(active<0) SwitchKind();
             Safe(delegate { foreach(string p in PrinterSettings.InstalledPrinters) printers.Items.Add(p); SyncPrinter(true); });
             FormClosed += delegate { if(preview.Image!=null) preview.Image.Dispose(); if(sample.Image!=null) sample.Image.Dispose(); document.Dispose(); placementBold.Dispose(); };
-            // 端ドラッグで拡大・縮小。下限は現行既定レイアウト（拡大後の縮小は可）。ダイアログは FixedDialog のまま。
+            // 端ドラッグで拡大・縮小。MinimumSize は操作可能な下限（起動 Size 未満）。縮小時は全体をスケール表示。
             preview.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             guide.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             status.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
@@ -358,7 +373,10 @@ public MainForm(string settingsFile)
             copiesCaption.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             // Anchor 確定後にもう一度帯を積み、起動直後から緑／青帯を出す（main #26 取り込み後も再ビルド）
             if(active>=0) UpdateNumberGuide();
-            MinimumSize = Size;
+            CaptureDesignSlots();
+            MinimumSize = new Size(
+                MinClientWidth + (Size.Width - ClientSize.Width),
+                MinClientHeight + (Size.Height - ClientSize.Height));
             garmentSummary.BringToFront();
             smallPlacement.BringToFront();
             largePlacement.BringToFront();
@@ -368,12 +386,107 @@ public MainForm(string settingsFile)
                 if(startupPlacementSynced || active<0) return;
                 startupPlacementSynced=true;
                 UpdateNumberGuide();
-                MinimumSize=new Size(Math.Max(MinimumSize.Width,Size.Width),Math.Max(MinimumSize.Height,Size.Height));
+                MinimumSize = new Size(
+                    MinClientWidth + (Size.Width - ClientSize.Width),
+                    MinClientHeight + (Size.Height - ClientSize.Height));
                 garmentSummary.BringToFront();
                 smallPlacement.BringToFront();
                 largePlacement.BringToFront();
             };
-            Resize += delegate { RelayoutColorLegendWidths(); };
+            Resize += delegate { ApplyResponsiveLayout(); };
+            ApplyResponsiveLayout();
+        }
+        void CaptureDesignSlots() {
+            System.Collections.Generic.Dictionary<Control,AnchorStyles> oldStretch=new System.Collections.Generic.Dictionary<Control,AnchorStyles>();
+            foreach(DesignSlot slot in designSlots) oldStretch[slot.Control]=slot.Stretch;
+            designSlots.Clear();
+            designClientSize=ClientSize;
+            foreach(Control c in Controls) {
+                AnchorStyles stretch=oldStretch.ContainsKey(c)?oldStretch[c]:c.Anchor;
+                designSlots.Add(new DesignSlot {
+                    Control=c,
+                    Bounds=new Rectangle(c.Left,c.Top,c.Width,c.Height),
+                    FontPt=c.Font.Size,
+                    Style=c.Font.Style,
+                    Family=c.Font.FontFamily.Name,
+                    Stretch=stretch
+                });
+                c.Anchor=AnchorStyles.None;
+            }
+            layoutReady=true;
+            layoutScale=1f;
+        }
+        void BeginDesignMutation() {
+            if(!layoutReady || mutatingDesign) return;
+            mutatingDesign=true;
+            savedUserClient=ClientSize;
+            savedDesignClient=designClientSize;
+            foreach(DesignSlot slot in designSlots) {
+                slot.Control.SetBounds(slot.Bounds.X,slot.Bounds.Y,slot.Bounds.Width,slot.Bounds.Height);
+                ApplySlotFont(slot,1f);
+            }
+            layoutScale=1f;
+            ClientSize=designClientSize;
+        }
+        void EndDesignMutation() {
+            if(!mutatingDesign) return;
+            Size newDesign=ClientSize;
+            CaptureDesignSlots();
+            int growW=newDesign.Width-savedDesignClient.Width;
+            int growH=newDesign.Height-savedDesignClient.Height;
+            ClientSize=new Size(
+                Math.Max(MinClientWidth,savedUserClient.Width+growW),
+                Math.Max(MinClientHeight,savedUserClient.Height+growH));
+            mutatingDesign=false;
+            ApplyResponsiveLayout();
+        }
+        void ApplySlotFont(DesignSlot slot, float scale) {
+            float pt=Math.Max(6f,slot.FontPt*scale);
+            Control c=slot.Control;
+            if(Math.Abs(c.Font.Size-pt)<0.05f && c.Font.Style==slot.Style && c.Font.FontFamily.Name==slot.Family) return;
+            c.Font=new Font(slot.Family,pt,slot.Style);
+        }
+        /// <summary>起動レイアウトを基準に、縮小は均一スケール、拡大は幅ストレッチでプレビュー等を追従。</summary>
+        void ApplyResponsiveLayout() {
+            if(!layoutReady || mutatingDesign || designClientSize.Width<=0 || designClientSize.Height<=0) return;
+            float sx=ClientSize.Width/(float)designClientSize.Width;
+            float sy=ClientSize.Height/(float)designClientSize.Height;
+            float scale=Math.Min(sx,sy);
+            if(scale>1f) scale=1f;
+            if(scale<0.5f) scale=0.5f;
+            int addW=0, addH=0, offX=0, offY=0;
+            if(scale>=0.999f) {
+                scale=1f;
+                addW=ClientSize.Width-designClientSize.Width;
+                addH=ClientSize.Height-designClientSize.Height;
+            } else {
+                offX=Math.Max(0,(ClientSize.Width-(int)Math.Round(designClientSize.Width*scale))/2);
+                offY=Math.Max(0,(ClientSize.Height-(int)Math.Round(designClientSize.Height*scale))/2);
+            }
+            SuspendLayout();
+            try {
+                foreach(DesignSlot slot in designSlots) {
+                    Rectangle b=slot.Bounds;
+                    int x=(int)Math.Round(b.X*scale)+offX;
+                    int y=(int)Math.Round(b.Y*scale)+offY;
+                    int w=Math.Max(1,(int)Math.Round(b.Width*scale));
+                    int h=Math.Max(1,(int)Math.Round(b.Height*scale));
+                    if(scale>=0.999f) {
+                        bool left=(slot.Stretch & AnchorStyles.Left)!=0;
+                        bool right=(slot.Stretch & AnchorStyles.Right)!=0;
+                        if(left && right) w=b.Width+addW;
+                        else if(right) x=b.X+addW;
+                        bool top=(slot.Stretch & AnchorStyles.Top)!=0;
+                        bool bottom=(slot.Stretch & AnchorStyles.Bottom)!=0;
+                        if(top && bottom) h=b.Height+addH;
+                        else if(bottom) y=b.Y+addH;
+                    }
+                    slot.Control.SetBounds(x,y,w,h);
+                    ApplySlotFont(slot,scale);
+                }
+                if(scale>=0.999f) RelayoutColorLegendWidths();
+            } finally { ResumeLayout(true); }
+            layoutScale=scale;
         }
         /// <summary>幅変更時に色凡例カードを二列で追従（Top 固定・Bottom アンカーは使わない）。</summary>
         void RelayoutColorLegendWidths() {
@@ -482,6 +595,9 @@ public MainForm(string settingsFile)
                 }
             }
             active=kinds.SelectedIndex; changing=true;
+            bool designMutation=layoutReady && !mutatingDesign;
+            if(designMutation) BeginDesignMutation();
+            try {
             LabelSpec spec=LabelCatalog.Items[active];
             selecting=true;
             SelectedCustomerIndex=spec.Customer;
@@ -535,43 +651,52 @@ public MainForm(string settingsFile)
             UpdateNumberGuide();
             UpdateFontControls();
             document.DefaultPageSettings.Landscape=active==2 || active==3 || spec.Layout=="QR";
+            } finally {
+                if(designMutation) EndDesignMutation();
+            }
             changing=false; Safe(UpdateSample); Safe(LoadPapers); UpdatePreview();
         }
         void UpdateNumberGuide()
         {
-            LabelSpec spec=LabelCatalog.Items[active];
-            UpdateColorLegend();
-            Color bandBlue=Color.FromArgb(218,237,255);
-            int count=digits.SelectedIndex==1?5:4;
-            number.MaxLength=active<2?count+1:active<4?LabelRenderer.NumberLimits[active]:spec.Layout=="QR"?6:spec.NumberLength>0?spec.NumberLength:10;
-            if(active<2 && number.Text.Length>number.MaxLength) number.Text=number.Text.Substring(0,number.MaxLength);
-            guide.Text="使用するラベル：白　｜　サイズ："+(active==0?"小（幅50mm・カット長24mm）":"大（幅50mm・カット長80mm）")+(active<2?"\r\nよつ葉のQRコード：Y＋数字"+count+"桁（例："+(count==5?"Y12345":"Y1234")+"／合計"+(count+1)+"文字）":"");
-            // 青帯: 形式を選んだら常に詳細な貼り付け先を出す（よつ葉の【選択中】行とは別枠）
-            smallPlacement.Visible=true;
-            smallPlacement.Text="貼り付け先："+spec.Placement;
-            smallPlacement.Font=placementBold;
-            smallPlacement.BackColor=bandBlue;
-            if(active<2) {
-                // 【選択中】行は貼り付け先帯の下に残す（2行分を1ラベルにまとめる）
-                largePlacement.Visible=true;
-                largePlacement.Text=(active==0?"▶ 小ネーム → 黒下【選択中】":"　小ネーム → 黒下")
-                    +"\r\n"+(active==1?"▶ 大ネーム → 白衣【選択中】":"　大ネーム → 白衣");
-                largePlacement.Font=Font;
-                largePlacement.BackColor=BackColor;
-            } else {
-                largePlacement.Text=spec.Pending!=""?"要確認："+spec.Pending:spec.Note+(spec.ColorGuide!=""?(spec.Note!=""?" ／ ":"")+"色の指定："+spec.ColorGuide:"");
-                largePlacement.Visible=largePlacement.Text!="" && !(spec.Customer==10 || spec.Customer==14);
-                largePlacement.Font=Font;
-                largePlacement.BackColor=BackColor;
-                if(active>=4) {
-                    string color=LabelCatalog.ColorName(active,Current());
-                    guide.Text=(color!=""?"使用するラベル："+color+"　｜　":"")+"サイズ："+(spec.UnknownSize?"未指定":spec.Small?"小（幅50mm・カット長24mm）":"大（幅50mm・カット長80mm）")+"\r\n"+(spec.Family=="MS PGothic"?"Pゴシック":spec.Family=="MS PMincho"?(spec.HeaderFamily!=""?"上段："+spec.HeaderFamily+"／下段P明朝":"P明朝"):"HG丸ゴシック")+(spec.StrictFont?"／氏名は20pt固定（収まらない場合は印刷できません）":"／文字の大きさは印字範囲に合わせて自動調整")+"／各欄右のptで変更可";
+            bool started=layoutReady && !mutatingDesign;
+            if(started) BeginDesignMutation();
+            try {
+                LabelSpec spec=LabelCatalog.Items[active];
+                UpdateColorLegend();
+                Color bandBlue=Color.FromArgb(218,237,255);
+                int count=digits.SelectedIndex==1?5:4;
+                number.MaxLength=active<2?count+1:active<4?LabelRenderer.NumberLimits[active]:spec.Layout=="QR"?6:spec.NumberLength>0?spec.NumberLength:10;
+                if(active<2 && number.Text.Length>number.MaxLength) number.Text=number.Text.Substring(0,number.MaxLength);
+                guide.Text="使用するラベル：白　｜　サイズ："+(active==0?"小（幅50mm・カット長24mm）":"大（幅50mm・カット長80mm）")+(active<2?"\r\nよつ葉のQRコード：Y＋数字"+count+"桁（例："+(count==5?"Y12345":"Y1234")+"／合計"+(count+1)+"文字）":"");
+                // 青帯: 形式を選んだら常に詳細な貼り付け先を出す（よつ葉の【選択中】行とは別枠）
+                smallPlacement.Visible=true;
+                smallPlacement.Text="貼り付け先："+spec.Placement;
+                smallPlacement.Font=placementBold;
+                smallPlacement.BackColor=bandBlue;
+                if(active<2) {
+                    // 【選択中】行は貼り付け先帯の下に残す（2行分を1ラベルにまとめる）
+                    largePlacement.Visible=true;
+                    largePlacement.Text=(active==0?"▶ 小ネーム → 黒下【選択中】":"　小ネーム → 黒下")
+                        +"\r\n"+(active==1?"▶ 大ネーム → 白衣【選択中】":"　大ネーム → 白衣");
+                    largePlacement.Font=Font;
+                    largePlacement.BackColor=BackColor;
+                } else {
+                    largePlacement.Text=spec.Pending!=""?"要確認："+spec.Pending:spec.Note+(spec.ColorGuide!=""?(spec.Note!=""?" ／ ":"")+"色の指定："+spec.ColorGuide:"");
+                    largePlacement.Visible=largePlacement.Text!="" && !(spec.Customer==10 || spec.Customer==14);
+                    largePlacement.Font=Font;
+                    largePlacement.BackColor=BackColor;
+                    if(active>=4) {
+                        string color=LabelCatalog.ColorName(active,Current());
+                        guide.Text=(color!=""?"使用するラベル："+color+"　｜　":"")+"サイズ："+(spec.UnknownSize?"未指定":spec.Small?"小（幅50mm・カット長24mm）":"大（幅50mm・カット長80mm）")+"\r\n"+(spec.Family=="MS PGothic"?"Pゴシック":spec.Family=="MS PMincho"?(spec.HeaderFamily!=""?"上段："+spec.HeaderFamily+"／下段P明朝":"P明朝"):"HG丸ゴシック")+(spec.StrictFont?"／氏名は20pt固定（収まらない場合は印刷できません）":"／文字の大きさは印字範囲に合わせて自動調整")+"／各欄右のptで変更可";
+                    }
                 }
+                UpdateGarmentSummary();
+                ResizePlacementGuides();
+                // 高さ確定後に同Y・重なりを矯正（Resize より前だと青帯が緑帯に隠れることがある）
+                EnsurePlacementBandStack();
+            } finally {
+                if(started) EndDesignMutation();
             }
-            UpdateGarmentSummary();
-            ResizePlacementGuides();
-            // 高さ確定後に同Y・重なりを矯正（Resize より前だと青帯が緑帯に隠れることがある）
-            EnsurePlacementBandStack();
         }
         /// <summary>複数形式の顧客だけ、貼り付け先帯の上に商品→大/小対応の色違い帯を出す。</summary>
         void UpdateGarmentSummary() {
@@ -809,6 +934,7 @@ public MainForm(string settingsFile)
             if(FormBorderStyle!=FormBorderStyle.Sizable)throw new Exception("メイン画面が端ドラッグでリサイズできない");
             if(!MaximizeBox)throw new Exception("メイン画面の最大化が無効");
             if(MinimumSize.IsEmpty)throw new Exception("MinimumSize未設定");
+            if(MinimumSize.Width>=Width || MinimumSize.Height>=Height)throw new Exception("MinimumSizeが起動サイズ以上で縮小余地がない");
             if(LabelCatalog.GarmentSummary(76)!="白衣：大ネーム　白下：小ネーム")throw new Exception("十勝大福の商品対応帯テキストが想定と違う");
             if(LabelCatalog.GarmentSummary(1)!="")throw new Exception("1形式顧客に商品対応帯テキストが出る");
             // Excel 大きさの QR 区別が緑帯に出ること（よつ葉十勝）
@@ -853,10 +979,22 @@ public MainForm(string settingsFile)
             person.Text="山田　太郎"; Application.DoEvents();
             if(Current().Person!="山田 太郎") throw new Exception("全角スペース注意書きと変換ロジックが矛盾");
             SelectedCustomerIndex=0; Application.DoEvents();
-            int baseW=ClientSize.Width, baseH=ClientSize.Height, previewW=preview.Width, guideW=guide.Width;
+            if(!IsHandleCreated) CreateControl();
+            int baseW=ClientSize.Width, baseH=ClientSize.Height, previewW=preview.Width, previewH=preview.Height, guideW=guide.Width;
             ClientSize=new Size(baseW+80,baseH+40);
+            ApplyResponsiveLayout();
             if(preview.Width<=previewW || guide.Width<=guideW)throw new Exception("拡大時にプレビュー／ガイドが追従していない");
             ClientSize=new Size(baseW,baseH);
+            ApplyResponsiveLayout();
+            int shrinkW=Math.Max(MinClientWidth,baseW-160), shrinkH=Math.Max(MinClientHeight,baseH-120);
+            ClientSize=new Size(shrinkW,shrinkH);
+            ApplyResponsiveLayout();
+            if(ClientSize.Width>=baseW && ClientSize.Height>=baseH)throw new Exception("ウィンドウを起動時より小さくできない");
+            if(preview.Width>=previewW && preview.Height>=previewH)throw new Exception("縮小時にプレビューが縮小表示されていない");
+            if(layoutScale>=0.999f)throw new Exception("縮小時にレイアウトスケールがかかっていない");
+            if(guide.Width>=guideW)throw new Exception("縮小時にガイドが縮小／追従していない");
+            ClientSize=new Size(baseW,baseH);
+            ApplyResponsiveLayout();
             if(customers.DropDownStyle!=ComboBoxStyle.DropDown)throw new Exception("顧客欄が入力不可（DropDownList）のまま");
             customers.Text="よつば";FillCustomerItems("よつば");
             if(customers.Items.Count<1)throw new Exception("メイン顧客欄の読み絞り込み失敗");
