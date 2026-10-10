@@ -36,6 +36,7 @@ on:
       - 'cursor/summer-select-banner-ac23'
       - 'cursor/window-shrink-scale-7f77'
       - 'cursor/company-field-layout-8989'
+      - 'cursor/enter-select-apply-eda6'
     paths:
       - '.github/workflows/build-windows.yml'
       - '統合ネームラベル/ソース/**'

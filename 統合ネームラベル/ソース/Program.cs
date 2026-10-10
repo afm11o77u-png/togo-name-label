@@ -144,7 +144,17 @@ namespace UnifiedLabels
             if(caret>=0 && caret<=typed.Length) customers.SelectionStart=caret;
             selecting=prev;
         }
-        /// <summary>Enter：絞り込み先頭（または完全一致）を確定し、フォーカスとキャレットを顧客欄に残す。</summary>
+        /// <summary>顧客コンボの選択をラベル形式・入力欄へ反映（SelectedIndexChanged 本体）。kinds が同値でも SwitchKind する。</summary>
+        void ApplyCustomerSelection() {
+            if(SelectedCustomerIndex<0) return;
+            int customer=SelectedCustomerIndex;
+            int[] ids=LabelCatalog.ForCustomer(customer);
+            int next=ids[lastFormats[customer]];
+            if(kinds.SelectedIndex!=next) kinds.SelectedIndex=next;
+            else SwitchKind();
+            Safe(delegate {preferences.Visit(customers.Text);});
+        }
+        /// <summary>Enter：絞り込み先頭（または完全一致）を確定し、内容切替のうえフォーカスとキャレットを顧客欄に残す。</summary>
         void CommitCustomerOnEnter() {
             if(selecting) return;
             string typed=customers.Text??"";
@@ -160,7 +170,12 @@ namespace UnifiedLabels
             } catch { }
             if(match!=null) {
                 FillCustomerItems("");
-                customers.SelectedItem=match;
+                // FillCustomerItems 内の Text 復元で既に同項目が選ばれていると SelectedIndexChanged が飛ばない。
+                // 表示の選択は selecting 中に済ませ、内容切替は必ず ApplyCustomerSelection で行う。
+                selecting=true;
+                try { customers.SelectedItem=match; }
+                finally { selecting=false; }
+                ApplyCustomerSelection();
             } else if(active>=0) SelectedCustomerIndex=LabelCatalog.Items[active].Customer;
             // ドロップダウン閉鎖後にフォーカス／キャレットを戻す（消えないようにする）
             BeginInvoke(new Action(delegate {
@@ -294,9 +309,7 @@ public MainForm(string settingsFile)
             person.TextChanged+=delegate { if(!changing) { emphasisStart=-1; emphasisLength=0; UpdateEmphasisGuide(); } };
             customers.SelectedIndexChanged += delegate {
                 if(selecting || SelectedCustomerIndex<0) return;
-                int[] ids=LabelCatalog.ForCustomer(SelectedCustomerIndex);
-                kinds.SelectedIndex=ids[lastFormats[SelectedCustomerIndex]];
-                Safe(delegate {preferences.Visit(customers.Text);});
+                ApplyCustomerSelection();
             };
             // 打ち込み中：ドロップダウン候補を一致顧客だけに更新（読み・全半角可）
             customers.TextUpdate += delegate {
@@ -1056,14 +1069,19 @@ public MainForm(string settingsFile)
             if(customers.Items.Count<1)throw new Exception("メイン顧客欄の読み絞り込み失敗");
             foreach(object item in customers.Items)if(!UserSettings.Matches(item.ToString(),"よつば"))throw new Exception("メイン顧客欄に不一致が残った");
             string topMatch=customers.Items[0].ToString();
+            int topCustomer=Array.IndexOf(LabelCatalog.Customers,topMatch);
             int narrowed=customers.Items.Count;customers.Text="よつ";FillCustomerItems("よつ");
             if(customers.Items.Count<narrowed)throw new Exception("メイン顧客欄の入力中絞り込み失敗");
             FillCustomerItems("");if(customers.Items.Count!=LabelCatalog.Customers.Length)throw new Exception("メイン顧客欄の全件復帰失敗");
+            // 別顧客へ移してから Enter 先頭確定し、内容切替（active）まで進むこと
+            SelectedCustomerIndex=1; Application.DoEvents();
+            if(LabelCatalog.Items[active].Customer==topCustomer)throw new Exception("Enter検証の前提（別顧客）にできない");
             customers.Text="よつば";FillCustomerItems("よつば");
             CommitCustomerOnEnter();
             if(customers.Text!=topMatch)throw new Exception("Enterで先頭候補が選ばれない");
-            if(SelectedCustomerIndex<0)throw new Exception("Enter確定後の顧客インデックス不正");
+            if(SelectedCustomerIndex!=topCustomer)throw new Exception("Enter確定後の顧客インデックス不正");
             if(customers.Items.Count!=LabelCatalog.Customers.Length)throw new Exception("Enter確定後の全件復帰失敗");
+            if(LabelCatalog.Items[active].Customer!=topCustomer)throw new Exception("Enter確定後に内容切替が走らない");
             Show();person.Text="山田 太郎";number.Text="Y1234";UpdatePreview();Application.DoEvents();
             // 会社名欄が PreferredHeight 未満／氏名欄より明らかに低い／ラベルに埋もれるのを検出（#29 スケール回帰）
             if(!header.Visible) throw new Exception("よつ葉小ネームで会社名欄が出ていない");
@@ -1128,7 +1146,7 @@ public MainForm(string settingsFile)
             }
             kinds.SelectedIndex=1;person.Text="山田 太郎";number.Text="Y1234";
             using(OffsetDialog dlg=new OffsetDialog("プリンターごと・ラベル形式ごとに保存\r\nよつ葉乳業 ／ 大ネーム",new PrintOffset(.5m,-.3m),CreatePreview,delegate{throw new Exception("実印刷は禁止");},delegate{})){dlg.Show();Application.DoEvents();using(Bitmap b=new Bitmap(dlg.Width,dlg.Height)){dlg.DrawToBitmap(b,new Rectangle(Point.Empty,dlg.Size));b.Save(Path.Combine(folder,"adjustment.png"));}dlg.Close();}
-            File.WriteAllText(Path.Combine(folder,"features-verification.txt"),"メイン顧客欄の入力絞り込み（読み・全半角）・Enter先頭候補確定・設定再読込・お気に入り・最近の重複除去・プリンター形式別分離・5形式の調整表示・印刷描画を確認。実印刷なし。",Encoding.UTF8);Hide();
+            File.WriteAllText(Path.Combine(folder,"features-verification.txt"),"メイン顧客欄の入力絞り込み（読み・全半角）・Enter先頭候補確定と内容切替・設定再読込・お気に入り・最近の重複除去・プリンター形式別分離・5形式の調整表示・印刷描画を確認。実印刷なし。",Encoding.UTF8);Hide();
         }
         public void Verify(string folder)
         {
