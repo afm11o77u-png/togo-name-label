@@ -7,6 +7,12 @@ on:
         description: Commit built exe/config back to the triggering branch
         type: boolean
         default: true
+  push:
+    branches:
+      - 'cursor/publish-built-exe-*'
+    paths:
+      - '.github/workflows/build-windows.yml'
+      - '統合ネームラベル/ソース/**'
 
 permissions:
   contents: write
@@ -35,7 +41,7 @@ jobs:
           if-no-files-found: error
 
       - name: Commit built artifacts to branch
-        if: ${{ inputs.commit_artifacts }}
+        if: ${{ github.event_name == 'push' || inputs.commit_artifacts }}
         shell: pwsh
         run: |
           git config user.name 'github-actions[bot]'
