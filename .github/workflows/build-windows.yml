@@ -37,6 +37,7 @@ on:
       - 'cursor/window-shrink-scale-7f77'
       - 'cursor/company-field-layout-8989'
       - 'cursor/enter-select-apply-eda6'
+      - 'cursor/compact-fixed-layout-3da3'
     paths:
       - '.github/workflows/build-windows.yml'
       - '統合ネームラベル/ソース/**'
