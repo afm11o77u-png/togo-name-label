@@ -210,7 +210,7 @@ public MainForm(string settingsFile)
             for(int i=0;i<drafts.Length;i++) drafts[i]=new LabelData {Header=LabelCatalog.Items[i].Heading};
             Text = "統合ネームラベル"; Font = new Font("Yu Gothic UI", 10);
             AutoScaleMode = AutoScaleMode.Dpi; ClientSize = new Size(1000,800);
-            FormBorderStyle = FormBorderStyle.FixedSingle; MaximizeBox = false; StartPosition = FormStartPosition.CenterScreen;
+            FormBorderStyle = FormBorderStyle.Sizable; MaximizeBox = true; StartPosition = FormStartPosition.CenterScreen;
             Label customerCaption=Caption("顧客",25,20);customerCaption.Width=95;Controls.Add(customerCaption); Field(customers,25,48,320);
             Button generic=new Button {Text="汎用ラベル"}; Field(generic,790,12,180);
             generic.Click+=delegate {using(GenericLabelForm dlg=new GenericLabelForm(preferences)) dlg.ShowDialog(this); UpdatePreview();};
@@ -238,10 +238,11 @@ public MainForm(string settingsFile)
             Controls.Add(Caption("完成見本（サンプル）",390,275));
             sample.SetBounds(390,302,200,100); sample.BackColor=Color.White; sample.BorderStyle=BorderStyle.FixedSingle;
             sample.SizeMode=PictureBoxSizeMode.Zoom; Controls.Add(sample);
-            Controls.Add(new Label {Text="見本の名前・番号は印刷されません。\r\n表示・印刷時、全角スペースはすべて半角に変換します。\r\n各入力欄右のptでサイズを変更できます。\r\n未変更時はカタログ／自動調整の既定のままです。",Left=610,Top=305,Width=360,Height=95});
+            Label sampleNote=new Label {Text="見本の名前・番号は印刷されません。\r\n表示・印刷時、全角スペースはすべて半角に変換します。\r\n各入力欄右のptでサイズを変更できます。\r\n未変更時はカタログ／自動調整の既定のままです。",Left=610,Top=305,Width=360,Height=95};
+            Controls.Add(sampleNote);
             Controls.Add(Caption("プリンター",25,410)); Field(printers,25,440,430);
             Controls.Add(Caption("用紙サイズ",480,410)); Field(papers,480,440,310);
-            Controls.Add(Caption("部数",815,410)); Field(copies,815,440,100); copies.Minimum=1; copies.Maximum=30; copies.Value=1;
+            Label copiesCaption=Caption("部数",815,410); Controls.Add(copiesCaption); Field(copies,815,440,100); copies.Minimum=1; copies.Maximum=30; copies.Value=1;
             guide.SetBounds(25,480,945,48); guide.BackColor=Color.White; guide.BorderStyle=BorderStyle.FixedSingle; guide.Padding=new Padding(6,3,0,0); Controls.Add(guide);
             Button page = new Button {Text="用紙・方向設定"}, proof = new Button {Text="印刷プレビュー"}, print = new Button {Text="印刷"};
             Field(page,25,535,180); Field(proof,225,535,180); Field(print,790,530,180); print.Height=42;
@@ -332,6 +333,30 @@ public MainForm(string settingsFile)
             kinds.SelectedIndex=0;
             Safe(delegate { foreach(string p in PrinterSettings.InstalledPrinters) printers.Items.Add(p); SyncPrinter(true); });
             FormClosed += delegate { if(preview.Image!=null) preview.Image.Dispose(); if(sample.Image!=null) sample.Image.Dispose(); document.Dispose(); placementBold.Dispose(); };
+            // 端ドラッグで拡大・縮小。下限は現行既定レイアウト（拡大後の縮小は可）。ダイアログは FixedDialog のまま。
+            MinimumSize = Size;
+            preview.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            guide.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            status.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            smallPlacement.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            largePlacement.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            sampleNote.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            sampleColor.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            generic.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            print.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            copies.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            copiesCaption.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            Resize += delegate { RelayoutColorLegendWidths(); };
+        }
+        /// <summary>幅変更時に色凡例カードを二列で追従（Top 固定・Bottom アンカーは使わない）。</summary>
+        void RelayoutColorLegendWidths() {
+            int cardWidth = Math.Max(200, (ClientSize.Width - 55) / 2);
+            int gap = Math.Max(10, ClientSize.Width - 50 - cardWidth * 2);
+            for (int n = 0; n < 4; n++) {
+                if (!colorLegend[n].Visible) continue;
+                colorLegend[n].Left = 25 + (n % 2) * (cardWidth + gap);
+                colorLegend[n].Width = cardWidth;
+            }
         }
         void SetupFontBox(NumericUpDown box, Label unit) {
             box.Minimum=6; box.Maximum=120; box.DecimalPlaces=0; box.Increment=1; box.Value=18;
@@ -533,10 +558,12 @@ public MainForm(string settingsFile)
                 foreach(Control control in footerControls) control.Top+=delta;
                 ClientSize=new Size(ClientSize.Width,ClientSize.Height+delta); legendHeight=targetHeight;
             }
+            int cardWidth=Math.Max(200,(ClientSize.Width-55)/2);
+            int gap=Math.Max(10,ClientSize.Width-50-cardWidth*2);
             for(int n=0;n<4;n++) {
                 colorLegend[n].Visible=n<colors.Count;
                 if(n>=colors.Count) continue;
-                colorLegend[n].SetBounds(25+(n%2)*480,505+(n/2)*(cardHeight+4),465,cardHeight);
+                colorLegend[n].SetBounds(25+(n%2)*(cardWidth+gap),505+(n/2)*(cardHeight+4),cardWidth,cardHeight);
                 colorLegend[n].BackColor=LabelCatalog.Swatch(colors[n]);
                 string list="";
                 for(int d=0;d<groups.Length;d++) if(groupColors[d]==colors[n]) {
@@ -701,6 +728,13 @@ public MainForm(string settingsFile)
             UserSettings r=new UserSettings(testPath);
             if(!r.Favorites.Contains("よつ葉乳業")||r.Recent.Count!=2||r.Recent[0]!="だるま食品"||r.Get("printer-A|small").X!=1.2m||r.Get("printer-A|big").Y!=3||r.Get("printer-B|small").X!=0)throw new Exception("設定保存の検証失敗");
             if(!UserSettings.Matches("Umios Hokkaido 札幌工場","ＵＭＩＯＳ")||!UserSettings.Matches("よつ葉乳業","よつ葉")||!UserSettings.Matches("よつ葉乳業㈱十勝工場","よつば")||!UserSettings.Matches("よつ葉乳業㈱十勝工場","ヨツバ")||!UserSettings.Matches("Umios Hokkaido 札幌工場","うみおす")||UserSettings.Matches("だるま食品","存在しない"))throw new Exception("検索の検証失敗");
+            if(FormBorderStyle!=FormBorderStyle.Sizable)throw new Exception("メイン画面が端ドラッグでリサイズできない");
+            if(!MaximizeBox)throw new Exception("メイン画面の最大化が無効");
+            if(MinimumSize.IsEmpty)throw new Exception("MinimumSize未設定");
+            int baseW=ClientSize.Width, baseH=ClientSize.Height, previewW=preview.Width, guideW=guide.Width;
+            ClientSize=new Size(baseW+80,baseH+40);
+            if(preview.Width<=previewW || guide.Width<=guideW)throw new Exception("拡大時にプレビュー／ガイドが追従していない");
+            ClientSize=new Size(baseW,baseH);
             if(customers.DropDownStyle!=ComboBoxStyle.DropDown)throw new Exception("顧客欄が入力不可（DropDownList）のまま");
             customers.Text="よつば";FillCustomerItems("よつば");
             if(customers.Items.Count<1)throw new Exception("メイン顧客欄の読み絞り込み失敗");
