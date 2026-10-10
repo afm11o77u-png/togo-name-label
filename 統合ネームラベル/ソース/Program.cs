@@ -356,7 +356,7 @@ public MainForm(string settingsFile)
             print.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             copies.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             copiesCaption.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            // Anchor 確定後にもう一度帯を積み、起動直後から緑／青帯を出す
+            // Anchor 確定後にもう一度帯を積み、起動直後から緑／青帯を出す（main #26 取り込み後も再ビルド）
             if(active>=0) UpdateNumberGuide();
             MinimumSize = Size;
             garmentSummary.BringToFront();
