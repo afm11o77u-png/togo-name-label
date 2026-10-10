@@ -144,6 +144,33 @@ namespace UnifiedLabels
             if(caret>=0 && caret<=typed.Length) customers.SelectionStart=caret;
             selecting=prev;
         }
+        /// <summary>Enter：絞り込み先頭（または完全一致）を確定し、フォーカスとキャレットを顧客欄に残す。</summary>
+        void CommitCustomerOnEnter() {
+            if(selecting) return;
+            string typed=customers.Text??"";
+            string match=null;
+            int kept=SelectedCustomerIndex;
+            if(kept>=0) match=LabelCatalog.Customers[kept];
+            else {
+                FillCustomerItems(typed);
+                if(customers.Items.Count>0) match=customers.Items[0].ToString();
+            }
+            try {
+                if(customers.DroppedDown) customers.DroppedDown=false;
+            } catch { }
+            if(match!=null) {
+                FillCustomerItems("");
+                customers.SelectedItem=match;
+            } else if(active>=0) SelectedCustomerIndex=LabelCatalog.Items[active].Customer;
+            // ドロップダウン閉鎖後にフォーカス／キャレットを戻す（消えないようにする）
+            BeginInvoke(new Action(delegate {
+                if(customers.IsDisposed) return;
+                customers.Focus();
+                string text=customers.Text??"";
+                customers.SelectionStart=text.Length;
+                customers.SelectionLength=0;
+            }));
+        }
         int SelectedCustomerIndex {
             get { return Array.IndexOf(LabelCatalog.Customers,customers.Text); }
             set {
@@ -255,6 +282,15 @@ public MainForm(string settingsFile)
                     customers.Text=typed;
                     if(caret>=0 && caret<=typed.Length) customers.SelectionStart=caret;
                 } catch { } finally { selecting=false; }
+            };
+            // Enter をダイアログキーにせず受け取り、先頭候補を確定（フォーカス維持）
+            customers.PreviewKeyDown += delegate(object sender, PreviewKeyDownEventArgs e) {
+                if(e.KeyCode==Keys.Enter) e.IsInputKey=true;
+            };
+            customers.KeyDown += delegate(object sender, KeyEventArgs e) {
+                if(e.KeyCode!=Keys.Enter) return;
+                e.Handled=true; e.SuppressKeyPress=true;
+                CommitCustomerOnEnter();
             };
             // クリック等で開いたとき、確定済み顧客なら全件を見せる（TextUpdate中は絞り込みを維持）
             customers.DropDown += delegate {
@@ -669,9 +705,15 @@ public MainForm(string settingsFile)
             customers.Text="よつば";FillCustomerItems("よつば");
             if(customers.Items.Count<1)throw new Exception("メイン顧客欄の読み絞り込み失敗");
             foreach(object item in customers.Items)if(!UserSettings.Matches(item.ToString(),"よつば"))throw new Exception("メイン顧客欄に不一致が残った");
+            string topMatch=customers.Items[0].ToString();
             int narrowed=customers.Items.Count;customers.Text="よつ";FillCustomerItems("よつ");
             if(customers.Items.Count<narrowed)throw new Exception("メイン顧客欄の入力中絞り込み失敗");
             FillCustomerItems("");if(customers.Items.Count!=LabelCatalog.Customers.Length)throw new Exception("メイン顧客欄の全件復帰失敗");
+            customers.Text="よつば";FillCustomerItems("よつば");
+            CommitCustomerOnEnter();
+            if(customers.Text!=topMatch)throw new Exception("Enterで先頭候補が選ばれない");
+            if(SelectedCustomerIndex<0)throw new Exception("Enter確定後の顧客インデックス不正");
+            if(customers.Items.Count!=LabelCatalog.Customers.Length)throw new Exception("Enter確定後の全件復帰失敗");
             Show();person.Text="山田 太郎";number.Text="Y1234";UpdatePreview();Application.DoEvents();
             if(!personFont.Visible || !headerFont.Visible || !numberFont.Visible) throw new Exception("よつ葉のフォントサイズUIが表示されていない");
             decimal beforePerson=personFont.Value;
@@ -700,7 +742,7 @@ public MainForm(string settingsFile)
             }
             kinds.SelectedIndex=1;person.Text="山田 太郎";number.Text="Y1234";
             using(OffsetDialog dlg=new OffsetDialog("プリンターごと・ラベル形式ごとに保存\r\nよつ葉乳業 ／ 大ネーム",new PrintOffset(.5m,-.3m),CreatePreview,delegate{throw new Exception("実印刷は禁止");},delegate{})){dlg.Show();Application.DoEvents();using(Bitmap b=new Bitmap(dlg.Width,dlg.Height)){dlg.DrawToBitmap(b,new Rectangle(Point.Empty,dlg.Size));b.Save(Path.Combine(folder,"adjustment.png"));}dlg.Close();}
-            File.WriteAllText(Path.Combine(folder,"features-verification.txt"),"メイン顧客欄の入力絞り込み（読み・全半角）・設定再読込・お気に入り・最近の重複除去・プリンター形式別分離・5形式の調整表示・印刷描画を確認。実印刷なし。",Encoding.UTF8);Hide();
+            File.WriteAllText(Path.Combine(folder,"features-verification.txt"),"メイン顧客欄の入力絞り込み（読み・全半角）・Enter先頭候補確定・設定再読込・お気に入り・最近の重複除去・プリンター形式別分離・5形式の調整表示・印刷描画を確認。実印刷なし。",Encoding.UTF8);Hide();
         }
         public void Verify(string folder)
         {
