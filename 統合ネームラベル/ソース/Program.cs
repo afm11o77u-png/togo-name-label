@@ -212,7 +212,12 @@ namespace UnifiedLabels
         bool layoutReady, mutatingDesign;
         Size savedUserClient, savedDesignClient;
         static Label Caption(string s, int x, int y) { return new Label {Text=s,Left=x,Top=y,Width=300,Height=25}; }
-        void Field(Control c, int x, int y, int width) { c.SetBounds(x,y,width,30); Controls.Add(c); }
+        // ラベルは欄より低くし、会社名などでラベル背景が TextBox を覆って潰れて見えるのを防ぐ。
+        const int FieldHeight = 30, LabelFieldHeight = 22, HeaderFieldTop = 194, HeaderLabelTop = 166;
+        void Field(Control c, int x, int y, int width) {
+            int h = (c is Label) ? LabelFieldHeight : FieldHeight;
+            c.SetBounds(x,y,width,h); Controls.Add(c);
+        }
         readonly UserSettings preferences;
 readonly Label offsetSummary=new Label(); PrintOffset temporaryOffset;
 string OffsetKey { get { var spec=LabelCatalog.Items[active]; return document.PrinterSettings.PrinterName+"|"+(spec.SettingsIdentity!=""?spec.SettingsIdentity:LabelCatalog.Customers[spec.Customer]+"|"+spec.Format+"|"+spec.Small+"|"+spec.Placement); } }
@@ -380,26 +385,59 @@ public MainForm(string settingsFile)
             garmentSummary.BringToFront();
             smallPlacement.BringToFront();
             largePlacement.BringToFront();
-            // ハンドル作成後の DPI／レイアウト確定でも帯が消えないよう初回表示で再同期
+            // ハンドル作成後の DPI／レイアウト確定でも帯が消えないよう初回表示で再同期。
+            // 入力欄の高さは DPI 後に再キャプチャし、会社名 TextBox の上下クリップを防ぐ。
             bool startupPlacementSynced=false;
             Shown += delegate {
                 if(startupPlacementSynced || active<0) return;
                 startupPlacementSynced=true;
                 UpdateNumberGuide();
+                NormalizeInputHeights();
+                CaptureDesignSlots();
                 MinimumSize = new Size(
                     MinClientWidth + (Size.Width - ClientSize.Width),
                     MinClientHeight + (Size.Height - ClientSize.Height));
+                ApplyResponsiveLayout();
                 garmentSummary.BringToFront();
                 smallPlacement.BringToFront();
                 largePlacement.BringToFront();
+                BringInputRowsToFront();
             };
             Resize += delegate { ApplyResponsiveLayout(); };
             ApplyResponsiveLayout();
+        }
+        void EnsurePreferredHeight(Control c) {
+            TextBoxBase tb = c as TextBoxBase;
+            if(tb!=null && !tb.Multiline) { int ph=tb.PreferredHeight; if(c.Height<ph) c.Height=ph; return; }
+            ComboBox cb = c as ComboBox;
+            if(cb!=null) { int ph=cb.PreferredHeight; if(c.Height<ph) c.Height=ph; return; }
+            NumericUpDown nud = c as NumericUpDown;
+            if(nud!=null) { int ph=nud.PreferredHeight; if(c.Height<ph) c.Height=ph; }
+        }
+        void NormalizeInputHeights() {
+            foreach(Control c in Controls) EnsurePreferredHeight(c);
+        }
+        int InputHeightFor(Control c, int scaledH) {
+            TextBoxBase tb = c as TextBoxBase;
+            if(tb!=null && !tb.Multiline) return Math.Max(scaledH, tb.PreferredHeight);
+            ComboBox cb = c as ComboBox;
+            if(cb!=null) return Math.Max(scaledH, cb.PreferredHeight);
+            NumericUpDown nud = c as NumericUpDown;
+            if(nud!=null) return Math.Max(scaledH, nud.PreferredHeight);
+            return scaledH;
+        }
+        void BringInputRowsToFront() {
+            // ラベル背景が入力欄を覆って潰れて見えるのを防ぐ（会社名行が典型）。
+            foreach(Control c in new Control[]{headerLabel,roleLabel,personLabel,numberLabel}) c.SendToBack();
+            foreach(Control c in new Control[]{header,role,person,number,department,colorDepartment,
+                headerFont,roleFont,personFont,numberFont,headerFontUnit,roleFontUnit,personFontUnit,numberFontUnit})
+                c.BringToFront();
         }
         void CaptureDesignSlots() {
             System.Collections.Generic.Dictionary<Control,AnchorStyles> oldStretch=new System.Collections.Generic.Dictionary<Control,AnchorStyles>();
             foreach(DesignSlot slot in designSlots) oldStretch[slot.Control]=slot.Stretch;
             designSlots.Clear();
+            NormalizeInputHeights();
             designClientSize=ClientSize;
             foreach(Control c in Controls) {
                 AnchorStyles stretch=oldStretch.ContainsKey(c)?oldStretch[c]:c.Anchor;
@@ -422,8 +460,9 @@ public MainForm(string settingsFile)
             savedUserClient=ClientSize;
             savedDesignClient=designClientSize;
             foreach(DesignSlot slot in designSlots) {
-                slot.Control.SetBounds(slot.Bounds.X,slot.Bounds.Y,slot.Bounds.Width,slot.Bounds.Height);
                 ApplySlotFont(slot,1f);
+                int h=InputHeightFor(slot.Control, slot.Bounds.Height);
+                slot.Control.SetBounds(slot.Bounds.X,slot.Bounds.Y,slot.Bounds.Width,h);
             }
             layoutScale=1f;
             ClientSize=designClientSize;
@@ -481,11 +520,15 @@ public MainForm(string settingsFile)
                         if(top && bottom) h=b.Height+addH;
                         else if(bottom) y=b.Y+addH;
                     }
-                    slot.Control.SetBounds(x,y,w,h);
+                    // 先にフォントを合わせ、TextBox/Combo/NUD は PreferredHeight 未満に潰さない。
                     ApplySlotFont(slot,scale);
+                    h=InputHeightFor(slot.Control,h);
+                    slot.Control.SetBounds(x,y,w,h);
                 }
                 if(scale>=0.999f) RelayoutColorLegendWidths();
             } finally { ResumeLayout(true); }
+            foreach(DesignSlot slot in designSlots) EnsurePreferredHeight(slot.Control);
+            BringInputRowsToFront();
             layoutScale=scale;
         }
         /// <summary>幅変更時に色凡例カードを二列で追従（Top 固定・Bottom アンカーは使わない）。</summary>
@@ -632,14 +675,20 @@ public MainForm(string settingsFile)
             string[] groups=LabelCatalog.ColorGroups(active);
             colorDepartment.Items.AddRange(groups);
             colorDepartment.Visible=groups.Length>0 && spec.Layout!="CohortName" && !spec.ColorFromDepartment; colorDepartment.SelectedItem=d.ColorDepartment;
-            colorDepartment.Top=194;
+            colorDepartment.Top=HeaderFieldTop;
             if(groups.Length>0 && spec.Layout!="CohortName" && !spec.ColorFromDepartment) {
                 string caption=spec.ColorCaption+"（ラベル色）";
                 if(departments!=null) { colorDepartment.Top=262; role.Visible=false; roleLabel.Visible=true; roleLabel.Text=caption; }
                 else { header.Visible=false; headerLabel.Visible=true; headerLabel.Text=caption; }
             }
             if(spec.Layout=="SizeNumber") { role.Visible=false; roleLabel.Visible=true; roleLabel.Text="その他サイズ（例：10L）"; header.Visible=true; header.Top=262; header.ReadOnly=false; header.MaxLength=5; header.Text=d.Header; }
-            else header.Top=194;
+            else {
+                // デザイン座標: ラベル直下。#29 スケール後もラベルと重なって潰れないよう相対位置＋PreferredHeight。
+                header.Top=headerLabel.Visible?headerLabel.Top+(HeaderFieldTop-HeaderLabelTop):HeaderFieldTop;
+                EnsurePreferredHeight(header);
+            }
+            EnsurePreferredHeight(person); EnsurePreferredHeight(role); EnsurePreferredHeight(number);
+            BringInputRowsToFront();
             person.Visible=personLabel.Visible=personSpaceNote.Visible=spec.NeedsName;
             personLabel.Text=(spec.SurnameOnly || spec.Layout=="Surname"?"苗字":"名前")+(spec.Reading!=""?"（"+spec.Reading+"で入力）":spec.SurnameOnly || spec.Layout=="Surname"?"（苗字のみ印字）":"（フルネーム）");
             if(spec.InputCaption!="")personLabel.Text=spec.InputCaption;
@@ -1016,6 +1065,16 @@ public MainForm(string settingsFile)
             if(SelectedCustomerIndex<0)throw new Exception("Enter確定後の顧客インデックス不正");
             if(customers.Items.Count!=LabelCatalog.Customers.Length)throw new Exception("Enter確定後の全件復帰失敗");
             Show();person.Text="山田 太郎";number.Text="Y1234";UpdatePreview();Application.DoEvents();
+            // 会社名欄が PreferredHeight 未満／氏名欄より明らかに低い／ラベルに埋もれるのを検出（#29 スケール回帰）
+            if(!header.Visible) throw new Exception("よつ葉小ネームで会社名欄が出ていない");
+            if(header.Height<header.PreferredHeight) throw new Exception("会社名欄の高さがPreferredHeight未満で文字がクリップする "+header.Height+"<"+header.PreferredHeight);
+            if(person.Visible && header.Height+2<person.Height) throw new Exception("会社名欄が氏名欄より低い "+header.Height+"<"+person.Height);
+            if(headerLabel.Visible && header.Top+2<headerLabel.Bottom) throw new Exception("会社名ラベルが入力欄に重なって潰れて見える");
+            if(headerFont.Visible && header.Height+4<headerFont.Height) throw new Exception("会社名欄がptスピナーより低い "+header.Height+"<"+headerFont.Height);
+            ClientSize=new Size(Math.Max(MinClientWidth,ClientSize.Width-160),Math.Max(MinClientHeight,ClientSize.Height-120));
+            ApplyResponsiveLayout(); Application.DoEvents();
+            if(header.Visible && header.Height<header.PreferredHeight) throw new Exception("縮小時に会社名欄がPreferredHeight未満 "+header.Height+"<"+header.PreferredHeight);
+            ClientSize=new Size(baseW,baseH); ApplyResponsiveLayout(); Application.DoEvents();
             if(!personFont.Visible || !headerFont.Visible || !numberFont.Visible) throw new Exception("よつ葉のフォントサイズUIが表示されていない");
             if(roleFont.Visible) throw new Exception("よつ葉に役職ptが出ている");
             decimal beforePerson=personFont.Value;
