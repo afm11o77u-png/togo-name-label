@@ -27,6 +27,7 @@ on:
       - 'cursor/per-field-font-ui-4d1b'
       - 'cursor/customer-enter-select-fed5'
       - 'cursor/window-resize-f0b9'
+      - 'cursor/garment-label-summary-c13d'
     paths:
       - '.github/workflows/build-windows.yml'
       - '統合ネームラベル/ソース/**'
