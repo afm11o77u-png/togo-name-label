@@ -44,6 +44,8 @@ namespace UnifiedLabels {
     if(garmentSummary.Visible)Need(garmentSummary.Bottom<=smallPlacement.Top && garmentSummary.Text==LabelCatalog.GarmentSummary(spec.Customer),"Garment summary overlap "+row);
     else Need(LabelCatalog.GarmentSummary(spec.Customer)=="","Garment summary should hide "+row);
     Need(smallPlacement.Visible && smallPlacement.Height>0 && smallPlacement.Text.StartsWith("貼り付け先：") && smallPlacement.Text.IndexOf(spec.Placement)>=0,"Placement band missing "+row);
+    string selection=LabelCatalog.SelectionGuide(spec.Customer,active);
+    if(selection!="")Need(largePlacement.Visible && largePlacement.Text==selection && largePlacement.Text.IndexOf("【選択中】")>=0,"Selection guide missing "+row);
     Need(smallPlacement.Bottom<=largePlacement.Top && largePlacement.Bottom<=guide.Top && status.Bottom<=ClientSize.Height,"Guide overlaps "+row);
     if(row==33){Need(!colorDepartment.Visible,"Duplicate department selection");department.SelectedItem="洋菓子チーム";Need(LabelCatalog.ColorName(active,Current())=="赤","Department color not linked");}
     if(row==222){Need(LabelCatalog.ColorName(active,Current())=="緑？","Fresh fish provisional color");header.Text="その他";Need(LabelCatalog.ColorName(active,Current())=="先方から指定","Unspecified department color");header.Text="鮮魚";}

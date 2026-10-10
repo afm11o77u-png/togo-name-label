@@ -146,6 +146,39 @@ namespace UnifiedLabels
             }
             return parts.Count<=1?"":string.Join("　",parts);
         }
+        /// <summary>よつ葉十勝など、形式→貼付先衣類の【選択中】対応表。従来 active&lt;2（QR Legacy）限定だった表示を同一顧客の全形式（夏服 HeadingName 含む）へ拡張。対象外は空。</summary>
+        public static string SelectionGuide(int customer, int activeKind)
+        {
+            int[] ids=ForCustomer(customer);
+            if(ids.Length<=1) return "";
+            // 従来 UI は active&lt;2（顧客0のQR小/大）だけ。同一顧客にその形式が含まれるときだけ対応表を出す。
+            bool usesSelectionMap=false;
+            for(int i=0;i<ids.Length;i++) if(ids[i]<2) { usesSelectionMap=true; break; }
+            if(!usesSelectionMap) return "";
+            List<string> lines=new List<string>();
+            foreach(int id in ids) {
+                LabelSpec spec=Items[id];
+                if(string.IsNullOrEmpty(spec.Placement)) continue;
+                string garment=PrimaryGarment(spec.Placement);
+                if(garment=="") continue;
+                string form=ShortFormName(spec.Format);
+                int paren=form.IndexOf('（');
+                if(paren>0) form=form.Substring(0,paren);
+                if(form=="") form=spec.Small?"小ネーム":"大ネーム";
+                bool selected=id==activeKind;
+                lines.Add((selected?"▶ ":"　")+form+" → "+garment+(selected?"【選択中】":""));
+            }
+            return lines.Count==0?"":string.Join("\r\n",lines);
+        }
+        /// <summary>Placement 先頭セグメントの衣類側（：より前）。</summary>
+        public static string PrimaryGarment(string placement)
+        {
+            if(string.IsNullOrEmpty(placement)) return "";
+            string seg=placement.Split('／')[0].Trim();
+            int colon=seg.IndexOf('：');
+            if(colon<0) colon=seg.IndexOf(':');
+            return colon>=0?seg.Substring(0,colon).Trim():"";
+        }
         /// <summary>Excel「大きさ」欄の短い修飾だけ緑帯に残す（QR／資格／通行服／パート2→パート・帽子 等）。長い説明括弧は落とす。</summary>
         static bool IsExcelSizeQualifier(string inner)
         {
