@@ -40,6 +40,7 @@ on:
       - 'cursor/compact-fixed-layout-3da3'
       - 'cursor/asukai-spacing-selection-baae'
       - 'cursor/umios-layout-enlarge-938e'
+      - 'cursor/customer-field-spacing-fddd'
     paths:
       - '.github/workflows/build-windows.yml'
       - '統合ネームラベル/ソース/**'
