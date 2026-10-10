@@ -145,14 +145,42 @@ namespace UnifiedLabels
             }
             return parts.Count<=1?"":string.Join("　",parts);
         }
+        /// <summary>Excel「大きさ」欄の短い修飾だけ緑帯に残す（QR／資格／通行服／パート2→パート・帽子 等）。長い説明括弧は落とす。</summary>
+        static bool IsExcelSizeQualifier(string inner)
+        {
+            if(string.IsNullOrEmpty(inner)) return false;
+            string[] keys={"QR","資格","通行服","社名","パート2","パート２","パート","実習生2","実習生","社員","QC","管理番号：半分","管理番号","ひらがな","ローマ字","☆","簡易名","1段","2段","苗字","フルネーム","部署","白","赤"};
+            for(int i=0;i<keys.Length;i++) if(inner==keys[i]) return true;
+            return false;
+        }
         public static string ShortFormName(string format)
         {
             if(string.IsNullOrEmpty(format)) return "";
-            if(format.IndexOf("小ネーム",StringComparison.Ordinal)>=0) return "小ネーム";
-            if(format.IndexOf("大ネーム",StringComparison.Ordinal)>=0) return "大ネーム";
-            int paren=format.IndexOf('（');
-            if(paren<0) paren=format.IndexOf('(');
-            return paren>0?format.Substring(0,paren):format;
+            string s=format.Replace('(','（').Replace(')','）');
+            string head=null;
+            if(s.StartsWith("小ネーム",StringComparison.Ordinal)) head="小ネーム";
+            else if(s.StartsWith("大ネーム",StringComparison.Ordinal)) head="大ネーム";
+            if(head!=null) {
+                if(s.Length>head.Length && s[head.Length]=='（') {
+                    int close=s.IndexOf('）', head.Length+1);
+                    if(close>head.Length) {
+                        string inner=s.Substring(head.Length+1, close-head.Length-1);
+                        if(close==s.Length-1 && IsExcelSizeQualifier(inner)) {
+                            if(inner=="パート2" || inner=="パート２") return "パート・帽子";
+                            if(inner=="QR") return head+"（QR）";
+                            if(inner=="資格") return head+"（資格）";
+                            return head+"（"+inner+"）";
+                        }
+                        if(inner.IndexOf("QR",StringComparison.Ordinal)>=0) return head+"（QR）";
+                        if(inner.IndexOf("資格",StringComparison.Ordinal)>=0 || inner.IndexOf("フォーク",StringComparison.Ordinal)>=0) return head+"（資格）";
+                        if(inner.IndexOf("パート",StringComparison.Ordinal)>=0 && inner.IndexOf("帽子",StringComparison.Ordinal)>=0) return "パート・帽子";
+                        if(inner.IndexOf("通行服",StringComparison.Ordinal)>=0) return head+"（通行服）";
+                    }
+                }
+                return head;
+            }
+            int paren=s.IndexOf('（');
+            return paren>0?s.Substring(0,paren):format;
         }
         public static Size Millimetres(int kind) { return Items[kind].Small?new Size(50,24):new Size(80,50); }
         public static string Validate(int kind,LabelData d)

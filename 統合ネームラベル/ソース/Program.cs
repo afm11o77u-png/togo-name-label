@@ -792,6 +792,11 @@ public MainForm(string settingsFile)
             if(MinimumSize.IsEmpty)throw new Exception("MinimumSize未設定");
             if(LabelCatalog.GarmentSummary(76)!="白衣：大ネーム　白下：小ネーム")throw new Exception("十勝大福の商品対応帯テキストが想定と違う");
             if(LabelCatalog.GarmentSummary(1)!="")throw new Exception("1形式顧客に商品対応帯テキストが出る");
+            // Excel 大きさの QR 区別が緑帯に出ること（よつ葉十勝）
+            string yotsubaBand=LabelCatalog.GarmentSummary(0);
+            if(yotsubaBand.IndexOf("小ネーム（QR）")<0 || yotsubaBand.IndexOf("大ネーム（QR）")<0)throw new Exception("よつ葉緑帯にQR区別が出ない "+yotsubaBand);
+            if(LabelCatalog.ShortFormName("大ネーム（パート2）")!="パート・帽子")throw new Exception("パート2の緑帯短縮がパート・帽子でない");
+            if(LabelCatalog.ShortFormName("大ネーム（資格）")!="大ネーム（資格）")throw new Exception("資格の緑帯短縮が想定と違う");
             SelectedCustomerIndex=76; Application.DoEvents();
             if(!garmentSummary.Visible || garmentSummary.Text!="白衣：大ネーム　白下：小ネーム")throw new Exception("十勝大福で商品対応帯が表示されない");
             if(!smallPlacement.Visible || smallPlacement.Text.IndexOf("貼り付け先：")!=0 || smallPlacement.Height<=0)throw new Exception("十勝大福で貼り付け先帯が出ない");
@@ -802,20 +807,20 @@ public MainForm(string settingsFile)
             if(!smallPlacement.Visible || smallPlacement.Text.IndexOf("貼り付け先：")!=0)throw new Exception("1形式顧客で貼り付け先帯が出ない");
             // よつ葉: 緑帯＋青帯（貼り付け先）＋【選択中】行が共存すること
             SelectedCustomerIndex=0; formats.SelectedIndex=0; Application.DoEvents();
-            if(!garmentSummary.Visible || garmentSummary.Height<=0)throw new Exception("よつ葉で商品対応帯が出ない");
+            if(!garmentSummary.Visible || garmentSummary.Height<=0 || garmentSummary.Text.IndexOf("小ネーム（QR）")<0)throw new Exception("よつ葉で商品対応帯（QR）が出ない");
             if(!smallPlacement.Visible || smallPlacement.Text!="貼り付け先：黒下：左前" || smallPlacement.Height<=0)throw new Exception("よつ葉小ネームで貼り付け先帯が出ない");
             if(!largePlacement.Visible || largePlacement.Text.IndexOf("【選択中】")<0)throw new Exception("よつ葉の【選択中】行が消えている");
             if(garmentSummary.Bottom>smallPlacement.Top || smallPlacement.Bottom>largePlacement.Top || largePlacement.Bottom>guide.Top)throw new Exception("よつ葉の帯レイアウトが重なっている");
             formats.SelectedIndex=1; Application.DoEvents();
             if(smallPlacement.Text!="貼り付け先：白衣：左胸" || largePlacement.Text.IndexOf("大ネーム → 白衣【選択中】")<0)throw new Exception("よつ葉大ネームで貼り付け先／選択中が更新されない");
-            // よつ葉東京工場: 五十音順2 r214–216 と同一（定型つなぎ＋白＋青）。「二種類」想定より Excel は3形式。
+            // よつ葉東京工場: Excel r212–214（社名つなぎ＋白＋通行服）。形式名は大きさ欄に合わせる。
             int[] tokyo=LabelCatalog.ForCustomer(73);
             if(tokyo.Length!=3) throw new Exception("よつ葉東京工場の形式数がExcelと違う "+tokyo.Length);
-            if(LabelCatalog.Items[tokyo[0]].Layout!="FixedSingle" || LabelCatalog.Items[tokyo[0]].Placement!="つなぎ：左胸(片布)" || LabelCatalog.Items[tokyo[0]].MaximumFont!=24)
+            if(LabelCatalog.Items[tokyo[0]].Layout!="FixedSingle" || LabelCatalog.Items[tokyo[0]].Format!="小ネーム（社名）" || LabelCatalog.Items[tokyo[0]].Placement!="つなぎ：左胸(片布)" || LabelCatalog.Items[tokyo[0]].MaximumFont!=24)
                 throw new Exception("よつ葉東京・つなぎ定型がExcelと違う");
             if(LabelCatalog.Items[tokyo[1]].Layout!="HeadingName" || LabelCatalog.Items[tokyo[1]].FixedColor!="白" || LabelCatalog.Items[tokyo[1]].UpperBandMm!=12f || LabelCatalog.Items[tokyo[1]].LowerBandMm!=12f)
                 throw new Exception("よつ葉東京・白ラベルがExcelと違う");
-            if(LabelCatalog.Items[tokyo[2]].Layout!="HeadingName" || LabelCatalog.Items[tokyo[2]].FixedColor!="青" || LabelCatalog.Items[tokyo[2]].UpperBandMm!=12f || LabelCatalog.Items[tokyo[2]].LowerBandMm!=12f)
+            if(LabelCatalog.Items[tokyo[2]].Layout!="HeadingName" || LabelCatalog.Items[tokyo[2]].Format!="小ネーム（通行服）" || LabelCatalog.Items[tokyo[2]].FixedColor!="青" || LabelCatalog.Items[tokyo[2]].UpperBandMm!=12f || LabelCatalog.Items[tokyo[2]].LowerBandMm!=12f)
                 throw new Exception("よつ葉東京・青ラベルがExcelと違う");
             SelectedCustomerIndex=73; formats.SelectedIndex=1; Application.DoEvents();
             if(!personSpaceNote.Visible || personSpaceNote.Text.IndexOf("全角スペース")<0) throw new Exception("氏名欄下の全角スペース注意書きが出ていない");
@@ -877,7 +882,7 @@ public MainForm(string settingsFile)
             if(ChoosePaper(new PaperSize[]{alias,small,large},1)!=large || ChoosePaper(new PaperSize[]{large,small},0)!=small || ChoosePaper(new PaperSize[]{alias},3)!=null || ChoosePaper(new PaperSize[]{large},0)!=null || ChoosePaper(new PaperSize[]{new PaperSize("ラベル 50 x 24 mm",315,197)},0)==null) throw new Exception("用紙自動選択検証失敗");
             int indented=0; for(int i=0;i<LabelCatalog.Items.Length;i++) if(LabelCatalog.Items[i].IndentUpper) indented++;
             if(indented!=19) throw new Exception("左インデントの件数が違います "+indented);
-            int yama=0; for(int i=0;i<LabelCatalog.Items.Length;i++) if(LabelCatalog.Items[i].SourceRow==118) yama=i;
+            int yama=0; for(int i=0;i<LabelCatalog.Items.Length;i++) if(LabelCatalog.Items[i].SourceRow==202) yama=i;
             using(Bitmap ink=new Bitmap(400,250)) using(Graphics g=Graphics.FromImage(ink)) {
                 g.Clear(Color.White); LabelCatalog.Draw(g,yama,new LabelData{Person="山田 太郎"});
                 int left=400; for(int y=8;y<70;y++) for(int x=0;x<400;x++) if(ink.GetPixel(x,y).R<128 && x<left) left=x;
@@ -1054,7 +1059,7 @@ public MainForm(string settingsFile)
             Hide(); File.WriteAllText(Path.Combine(folder,"verification.txt"),"PASS: long placement wraps without overlap; color and cohort guides; fixed-font notice; changing formats restores original window height. No print job sent.",Encoding.UTF8);
         }
         void VerifyBulkAdditions(string folder) {
-            if(LabelCatalog.Items.Length!=226 || LabelCatalog.Customers.Length!=131) throw new Exception("登録件数不一致");
+            if(LabelCatalog.Items.Length!=227 || LabelCatalog.Customers.Length!=131) throw new Exception("登録件数不一致");
             foreach(int row in new int[]{45,46,74,108+1,132+1}) {
                 kinds.SelectedIndex=KindForRow(row); department.SelectedIndex=0;
                 if(LabelCatalog.ColorGroups(active).Length>0) { colorDepartment.SelectedIndex=1; if(colorDepartment.Bounds.IntersectsWith(department.Bounds)) throw new Exception("部署と色の入力欄が重なっています"); }
@@ -1077,7 +1082,7 @@ public MainForm(string settingsFile)
             kinds.SelectedIndex=KindForRow(129); if(LabelRenderer.Validate(active,Current())==null || person.Visible || number.Visible) throw new Exception("無地ガイド検証失敗");
             kinds.SelectedIndex=KindForRow(154); colorDepartment.SelectedIndex=0; person.Text="ヤマダ"; if(LabelRenderer.Validate(active,Current())==null) throw new Exception("上下氏名の区切り検証失敗"); person.Text="ヤマダ タロウ";
             using(Bitmap b=new Bitmap(Width,Height)) { DrawToBitmap(b,new Rectangle(0,0,Width,Height)); b.Save(Path.Combine(folder,"window-bulk.png")); }
-            File.WriteAllText(Path.Combine(folder,"bulk-verification.txt"),"PASS: 131 customers / 226 formats; independent department and color controls; distinct color rules retain selections; numeric lengths including leading zero; cohort colors 1..12; invalid cohorts; circled numbers; fixed font overflow; optional role; blank label; specified male color; two-row surname/given name.",Encoding.UTF8);
+            File.WriteAllText(Path.Combine(folder,"bulk-verification.txt"),"PASS: 131 customers / 227 formats; independent department and color controls; distinct color rules retain selections; numeric lengths including leading zero; cohort colors 1..12; invalid cohorts; circled numbers; fixed font overflow; optional role; blank label; specified male color; two-row surname/given name.",Encoding.UTF8);
         }
     }
     static class Program
