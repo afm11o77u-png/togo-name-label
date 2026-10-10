@@ -40,6 +40,8 @@ namespace UnifiedLabels {
     UpdatePreview();Need(!status.Text.StartsWith("処理できません"),"Preview error "+row+" "+status.Text);
     if(spec.Pending=="")Need(LabelRenderer.Validate(active,Current())==null,"Invalid example "+row+" "+LabelRenderer.Validate(active,Current()));
     else Need(LabelRenderer.Validate(active,Current())!=null,"Incomplete template permitted "+row);
+    if(garmentSummary.Visible)Need(garmentSummary.Bottom<=smallPlacement.Top && garmentSummary.Text==LabelCatalog.GarmentSummary(spec.Customer),"Garment summary overlap "+row);
+    else Need(LabelCatalog.GarmentSummary(spec.Customer)=="","Garment summary should hide "+row);
     Need(smallPlacement.Bottom<=largePlacement.Top && largePlacement.Bottom<=guide.Top && status.Bottom<=ClientSize.Height,"Guide overlaps "+row);
     if(row==156){Need(!colorDepartment.Visible,"Duplicate department selection");department.SelectedItem="洋菓子チーム";Need(LabelCatalog.ColorName(active,Current())=="赤","Department color not linked");}
     if(row==97){Need(LabelCatalog.ColorName(active,Current())=="緑？","Fresh fish provisional color");header.Text="その他";Need(LabelCatalog.ColorName(active,Current())=="先方から指定","Unspecified department color");header.Text="鮮魚";}

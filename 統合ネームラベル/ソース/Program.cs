@@ -181,11 +181,12 @@ namespace UnifiedLabels
         readonly int[] lastFormats=new int[LabelCatalog.Customers.Length];
         readonly TextBox header = new TextBox(), role = new TextBox(), person = new TextBox(), number = new TextBox();
         readonly Label headerLabel = new Label(), roleLabel = new Label(), status = new Label(), guide = new Label();
-        readonly Label smallPlacement = new Label(), largePlacement = new Label();
+        readonly Label smallPlacement = new Label(), largePlacement = new Label(), garmentSummary = new Label();
         readonly Label personLabel = new Label(), numberLabel = new Label();
         readonly NumericUpDown headerFont = new NumericUpDown(), roleFont = new NumericUpDown(), personFont = new NumericUpDown(), numberFont = new NumericUpDown();
         readonly Label headerFontUnit = new Label(), roleFontUnit = new Label(), personFontUnit = new Label(), numberFontUnit = new Label();
         readonly Font placementBold = new Font("Yu Gothic UI",10,FontStyle.Bold);
+        int garmentSummarySlot;
         readonly NumericUpDown copies = new NumericUpDown();
         const int FieldWidth = 230, FontBoxLeft = 260, FontBoxWidth = 55, FontUnitLeft = 318;
 
@@ -251,8 +252,11 @@ public MainForm(string settingsFile)
             foreach(Control control in Controls) if(control.Top>=410 || (control.Left>=390 && control.Top>=275)) control.Top+=100;
             foreach(Control control in Controls) if(control.Left==25 && control.Top>=96 && control.Top<=395) control.Top+=70;
             foreach(Control control in Controls) if(control.Top>=580) control.Top+=50;
+            // 貼り付け先帯の直上。高さ0で開始し、複数形式時だけ UpdateGarmentSummary で押し広げ。
+            garmentSummary.SetBounds(25,580,945,0); garmentSummary.Visible=false;
+            garmentSummary.Padding=new Padding(6,2,0,0); garmentSummary.BackColor=Color.FromArgb(232,245,220);
             smallPlacement.SetBounds(25,580,945,23); largePlacement.SetBounds(25,604,945,23);
-            Controls.Add(smallPlacement); Controls.Add(largePlacement);
+            Controls.Add(garmentSummary); Controls.Add(smallPlacement); Controls.Add(largePlacement);
             sampleColor.SetBounds(610,375,350,25); sampleColor.TextAlign=ContentAlignment.MiddleLeft; Controls.Add(sampleColor);
             foreach(Control control in Controls) if(control.Top>=510) footerControls.Add(control);
             for(int n=0;n<4;n++) { colorLegend[n].SetBounds(25+(n%2)*480,505+(n/2)*44,465,40); colorLegend[n].BorderStyle=BorderStyle.FixedSingle; colorLegend[n].Padding=new Padding(5,1,0,0); colorLegend[n].Visible=false; Controls.Add(colorLegend[n]); }
@@ -338,6 +342,7 @@ public MainForm(string settingsFile)
             preview.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             guide.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             status.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            garmentSummary.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             smallPlacement.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             largePlacement.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             sampleNote.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
@@ -531,7 +536,29 @@ public MainForm(string settingsFile)
                 string color=LabelCatalog.ColorName(active,Current());
                 guide.Text=(color!=""?"使用するラベル："+color+"　｜　":"")+"サイズ："+(spec.UnknownSize?"未指定":spec.Small?"小（幅50mm・カット長24mm）":"大（幅50mm・カット長80mm）")+"\r\n"+(spec.Family=="MS PGothic"?"Pゴシック":spec.Family=="MS PMincho"?(spec.HeaderFamily!=""?"上段："+spec.HeaderFamily+"／下段P明朝":"P明朝"):"HG丸ゴシック")+(spec.StrictFont?"／氏名は20pt固定（収まらない場合は印刷できません）":"／文字の大きさは印字範囲に合わせて自動調整")+"／各欄右のptで変更可";
             }
+            UpdateGarmentSummary();
             ResizePlacementGuides();
+        }
+        /// <summary>複数形式の顧客だけ、貼り付け先帯の上に商品→大/小対応の色違い帯を出す。</summary>
+        void UpdateGarmentSummary() {
+            string text=active<0?"":LabelCatalog.GarmentSummary(LabelCatalog.Items[active].Customer);
+            bool show=text!="";
+            garmentSummary.Text=show?text:"";
+            garmentSummary.Font=Font;
+            garmentSummary.BackColor=Color.FromArgb(232,245,220);
+            garmentSummary.Visible=show;
+            int measured=show?TextRenderer.MeasureText(text,garmentSummary.Font,new Size(Math.Max(40,garmentSummary.Width-10),1000),TextFormatFlags.WordBreak).Height:0;
+            int unwrapped=show?Math.Max(TextRenderer.MeasureText(text,garmentSummary.Font).Width,text.Length*garmentSummary.Font.Height):0;
+            int conservative=show?(int)Math.Ceiling(unwrapped/(double)Math.Max(40,garmentSummary.Width-10))*garmentSummary.Font.Height:0;
+            int needed=show?Math.Max(23,Math.Max(measured,conservative)+4):0;
+            int delta=needed-garmentSummarySlot;
+            if(delta!=0) {
+                foreach(Control control in footerControls)
+                    if(control!=garmentSummary && control.Top>=garmentSummary.Top) control.Top+=delta;
+                ClientSize=new Size(ClientSize.Width,ClientSize.Height+delta);
+                garmentSummarySlot=needed;
+            }
+            garmentSummary.Height=needed;
         }
         void ResizePlacementGuides() {
             foreach(Label label in new Label[]{smallPlacement,largePlacement}) {
@@ -731,6 +758,15 @@ public MainForm(string settingsFile)
             if(FormBorderStyle!=FormBorderStyle.Sizable)throw new Exception("メイン画面が端ドラッグでリサイズできない");
             if(!MaximizeBox)throw new Exception("メイン画面の最大化が無効");
             if(MinimumSize.IsEmpty)throw new Exception("MinimumSize未設定");
+            if(LabelCatalog.GarmentSummary(76)!="白衣：大ネーム　白下：小ネーム")throw new Exception("十勝大福の商品対応帯テキストが想定と違う");
+            if(LabelCatalog.GarmentSummary(1)!="")throw new Exception("1形式顧客に商品対応帯テキストが出る");
+            SelectedCustomerIndex=76; Application.DoEvents();
+            if(!garmentSummary.Visible || garmentSummary.Text!="白衣：大ネーム　白下：小ネーム")throw new Exception("十勝大福で商品対応帯が表示されない");
+            if(garmentSummary.Bottom>smallPlacement.Top)throw new Exception("商品対応帯が貼り付け先帯と重なっている");
+            if(smallPlacement.Bottom>largePlacement.Top || largePlacement.Bottom>guide.Top)throw new Exception("貼り付け先帯レイアウトが崩れている");
+            SelectedCustomerIndex=1; Application.DoEvents();
+            if(garmentSummary.Visible || garmentSummary.Height!=0)throw new Exception("1形式顧客で商品対応帯が残っている");
+            SelectedCustomerIndex=0; Application.DoEvents();
             int baseW=ClientSize.Width, baseH=ClientSize.Height, previewW=preview.Width, guideW=guide.Width;
             ClientSize=new Size(baseW+80,baseH+40);
             if(preview.Width<=previewW || guide.Width<=guideW)throw new Exception("拡大時にプレビュー／ガイドが追従していない");
@@ -952,6 +988,7 @@ public MainForm(string settingsFile)
                 person.Text=spec.Reading=="カタカナ"?"ヤマダ タロウ":"山田 太郎";
                 if(spec.NumberLength>0) number.Text="1234567890".Substring(0,spec.NumberLength); else number.Text="60";
                 if(spec.Layout=="CohortName") role.Text="5";
+                if(garmentSummary.Visible && garmentSummary.Bottom>smallPlacement.Top) throw new Exception("商品対応帯が重なっています "+row);
                 if(smallPlacement.Bottom>largePlacement.Top || largePlacement.Bottom>guide.Top || status.Bottom>ClientSize.Height) throw new Exception("ガイド配置が重なっています "+row);
                 File.AppendAllText(Path.Combine(folder,"guide-sizes.txt"),row+": "+smallPlacement.Height+" / "+smallPlacement.Text.Length+" characters\r\n");
                 using(Bitmap b=new Bitmap(Width,Height)) { DrawToBitmap(b,new Rectangle(0,0,Width,Height)); b.Save(Path.Combine(folder,"window-row-"+row+".png")); }

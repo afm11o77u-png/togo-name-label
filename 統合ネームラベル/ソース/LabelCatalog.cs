@@ -121,6 +121,39 @@ namespace UnifiedLabels
         public static readonly LabelSpec[] Items=CreateItems();
         public static int[] ForCustomer(int customer)
         { List<int> found=new List<int>(); for(int i=0;i<Items.Length;i++) if(Items[i].Customer==customer) found.Add(i); return found.ToArray(); }
+        /// <summary>複数形式の顧客向け。Placement の衣類側と形式名（大/小ネーム等）から「白衣：大ネーム　白下：小ネーム」を組み立てる。1形式のみは空。</summary>
+        public static string GarmentSummary(int customer)
+        {
+            int[] ids=ForCustomer(customer);
+            if(ids.Length<=1) return "";
+            List<string> parts=new List<string>();
+            HashSet<string> seen=new HashSet<string>();
+            foreach(int id in ids) {
+                LabelSpec spec=Items[id];
+                if(string.IsNullOrEmpty(spec.Placement)) continue;
+                string form=ShortFormName(spec.Format);
+                foreach(string seg in spec.Placement.Split('／')) {
+                    string garment=seg.Trim();
+                    int colon=garment.IndexOf('：');
+                    if(colon<0) colon=garment.IndexOf(':');
+                    if(colon>=0) garment=garment.Substring(0,colon).Trim();
+                    if(garment=="") continue;
+                    string key=garment+"\0"+form;
+                    if(!seen.Add(key)) continue;
+                    parts.Add(garment+"："+form);
+                }
+            }
+            return parts.Count<=1?"":string.Join("　",parts);
+        }
+        public static string ShortFormName(string format)
+        {
+            if(string.IsNullOrEmpty(format)) return "";
+            if(format.IndexOf("小ネーム",StringComparison.Ordinal)>=0) return "小ネーム";
+            if(format.IndexOf("大ネーム",StringComparison.Ordinal)>=0) return "大ネーム";
+            int paren=format.IndexOf('（');
+            if(paren<0) paren=format.IndexOf('(');
+            return paren>0?format.Substring(0,paren):format;
+        }
         public static Size Millimetres(int kind) { return Items[kind].Small?new Size(50,24):new Size(80,50); }
         public static string Validate(int kind,LabelData d)
         {
