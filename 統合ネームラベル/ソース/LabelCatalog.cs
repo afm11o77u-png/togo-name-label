@@ -43,8 +43,9 @@ namespace UnifiedLabels
         /// <summary>役職／ふりがな／☆／名前1文字など、独立して描画される役職欄用。</summary>
         public bool UsesRoleFont {
             get {
-                // Legacy の役職は Umios(QR) のみ画面表示。よつ葉・だるまは role 非表示なので UI 側で抑止。
-                return Layout=="QR" || Layout=="RoleName" || Layout=="DeptRoleName" || Layout=="DeptFurigana"
+                // Legacy は Umios 札幌・大ネーム（QR）のみ role 欄を出す（よつ葉・だるまは role 非表示で UI 抑止）。
+                // Layout=QR（十勝など）も同じ描画経路で役職ptが必要。
+                return Layout=="Legacy" || Layout=="QR" || Layout=="RoleName" || Layout=="DeptRoleName" || Layout=="DeptFurigana"
                     || Layout=="StarRoman" || Layout=="InitialName" || Layout=="InitialMixed";
             }
         }
