@@ -936,3 +936,4 @@ public MainForm(string settingsFile)
         }
     }
 }
+
