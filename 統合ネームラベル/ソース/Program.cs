@@ -210,7 +210,7 @@ public MainForm(string settingsFile)
             clearEmphasis.Click+=delegate { emphasisStart=-1; emphasisLength=0; UpdateEmphasisGuide(); UpdatePreview(); };
             person.TextChanged+=delegate { if(!changing) { emphasisStart=-1; emphasisLength=0; UpdateEmphasisGuide(); } };
             customers.SelectedIndexChanged += delegate {
-                if(selecting) return;
+                if(selecting || SelectedCustomerIndex<0) return;
                 int[] ids=LabelCatalog.ForCustomer(SelectedCustomerIndex);
                 kinds.SelectedIndex=ids[lastFormats[SelectedCustomerIndex]];
                 Safe(delegate {preferences.Visit(customers.Text);});
@@ -529,7 +529,7 @@ public MainForm(string settingsFile)
             UserSettings s=new UserSettings(testPath);s.Favorites.Clear();s.Recent.Clear();s.Toggle("よつ葉乳業");s.Visit("だるま食品");s.Visit("よつ葉乳業");s.Visit("だるま食品");s.Set("printer-A|small",new PrintOffset(1.2m,-.3m));s.Set("printer-A|big",new PrintOffset(-2m,3m));
             UserSettings r=new UserSettings(testPath);
             if(!r.Favorites.Contains("よつ葉乳業")||r.Recent.Count!=2||r.Recent[0]!="だるま食品"||r.Get("printer-A|small").X!=1.2m||r.Get("printer-A|big").Y!=3||r.Get("printer-B|small").X!=0)throw new Exception("設定保存の検証失敗");
-            if(!UserSettings.Matches("Umios Hokkaido 札幌工場","ＵＭＩＯＳ")||!UserSettings.Matches("よつ葉乳業","よつ葉")||UserSettings.Matches("だるま食品","存在しない"))throw new Exception("検索の検証失敗");
+            if(!UserSettings.Matches("Umios Hokkaido 札幌工場","ＵＭＩＯＳ")||!UserSettings.Matches("よつ葉乳業","よつ葉")||!UserSettings.Matches("よつ葉乳業㈱十勝工場","よつば")||!UserSettings.Matches("よつ葉乳業㈱十勝工場","ヨツバ")||!UserSettings.Matches("Umios Hokkaido 札幌工場","うみおす")||UserSettings.Matches("だるま食品","存在しない"))throw new Exception("検索の検証失敗");
             Show();person.Text="山田 太郎";number.Text="Y1234";UpdatePreview();Application.DoEvents();
             using(Bitmap b=new Bitmap(Width,Height)){DrawToBitmap(b,new Rectangle(Point.Empty,Size));b.Save(Path.Combine(folder,"main.png"));}
             using(CustomerPicker dlg=new CustomerPicker(r)){dlg.VerifyFilters();dlg.Show();Application.DoEvents();using(Bitmap b=new Bitmap(dlg.Width,dlg.Height)){dlg.DrawToBitmap(b,new Rectangle(Point.Empty,dlg.Size));b.Save(Path.Combine(folder,"customers.png"));}dlg.Close();}
@@ -540,7 +540,7 @@ public MainForm(string settingsFile)
             }
             kinds.SelectedIndex=1;person.Text="山田 太郎";number.Text="Y1234";
             using(OffsetDialog dlg=new OffsetDialog("プリンターごと・ラベル形式ごとに保存\r\nよつ葉乳業 ／ 大ネーム",new PrintOffset(.5m,-.3m),CreatePreview,delegate{throw new Exception("実印刷は禁止");},delegate{})){dlg.Show();Application.DoEvents();using(Bitmap b=new Bitmap(dlg.Width,dlg.Height)){dlg.DrawToBitmap(b,new Rectangle(Point.Empty,dlg.Size));b.Save(Path.Combine(folder,"adjustment.png"));}dlg.Close();}
-            File.WriteAllText(Path.Combine(folder,"features-verification.txt"),"検索・全半角英字、設定再読込、お気に入り、最近の重複除去、プリンター・形式別の分離、5形式の調整表示・印刷描画を確認。実印刷なし。",Encoding.UTF8);Hide();
+            File.WriteAllText(Path.Combine(folder,"features-verification.txt"),"検索・全半角英字・読み仮名・入力中絞り込み、設定再読込、お気に入り、最近の重複除去、プリンター・形式別の分離、5形式の調整表示・印刷描画を確認。実印刷なし。",Encoding.UTF8);Hide();
         }
         public void Verify(string folder)
         {
