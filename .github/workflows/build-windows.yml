@@ -38,6 +38,7 @@ on:
       - 'cursor/company-field-layout-8989'
       - 'cursor/enter-select-apply-eda6'
       - 'cursor/compact-fixed-layout-3da3'
+      - 'cursor/asukai-spacing-selection-baae'
     paths:
       - '.github/workflows/build-windows.yml'
       - '統合ネームラベル/ソース/**'

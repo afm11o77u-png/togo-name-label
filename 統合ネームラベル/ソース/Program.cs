@@ -204,10 +204,11 @@ namespace UnifiedLabels
         int garmentSummarySlot;
         readonly NumericUpDown copies = new NumericUpDown();
         // 既定の小型レイアウト（目標スクショ ~812×784 相当）。リサイズ／均一スケールは使わない。
-        const int FormClientWidth = 800, FormClientHeight = 560;
+        const int FormClientWidth = 800, FormClientHeight = 572;
         const int FieldWidth = 200, FontBoxLeft = 218, FontBoxWidth = 48, FontUnitLeft = 268;
         const int LeftX = 12, PreviewX = 310, PreviewWidth = 470;
-        const int LegendTop = 336, BandTop = 382, GuideTop = 430, ButtonTop = 478, StatusTop = 518;
+        // 入力行の行間を広げた分、プリンター以降を少し下げて固定サイズ内に収める。
+        const int LegendTop = 348, BandTop = 394, GuideTop = 442, ButtonTop = 490, StatusTop = 530;
 
         readonly PictureBox preview = new PictureBox();
         readonly PictureBox sample = new PictureBox();
@@ -217,8 +218,18 @@ namespace UnifiedLabels
         bool changing;
         static Label Caption(string s, int x, int y) { return new Label {Text=s,Left=x,Top=y,Width=280,Height=18}; }
         // ラベルは欄より低くし、会社名などでラベル背景が TextBox を覆って潰れて見えるのを防ぐ。
-        const int FieldHeight = 26, LabelFieldHeight = 18, HeaderFieldTop = 108, HeaderLabelTop = 88;
-        const int RoleFieldTop = 148, PersonFieldTop = 188;
+        // 入力行は PreferredHeight 後も見出しと枠が被らないよう、行間を広めに取る。
+        const int FieldHeight = 26, LabelFieldHeight = 18, HeaderLabelTop = 86;
+        const int CaptionToField = 20, AfterFieldGap = 10, AfterNoteGap = 6;
+        const int HeaderFieldTop = HeaderLabelTop + CaptionToField; // 106
+        const int RoleLabelTop = HeaderFieldTop + FieldHeight + AfterFieldGap; // 142
+        const int RoleFieldTop = RoleLabelTop + CaptionToField; // 162
+        const int PersonLabelTop = RoleFieldTop + FieldHeight + AfterFieldGap; // 198
+        const int PersonFieldTop = PersonLabelTop + CaptionToField; // 218
+        const int PersonNoteTop = PersonFieldTop + FieldHeight + 4; // 248
+        const int NumberLabelTop = PersonNoteTop + 14 + AfterNoteGap; // 268
+        const int NumberFieldTop = NumberLabelTop + CaptionToField; // 288
+        const int ExtraRowTop = NumberFieldTop + FieldHeight + AfterFieldGap; // 324（桁数／強調）
         void Field(Control c, int x, int y, int width) {
             int h = (c is Label) ? LabelFieldHeight : FieldHeight;
             c.SetBounds(x,y,width,h); Controls.Add(c);
@@ -254,19 +265,19 @@ public MainForm(string settingsFile)
             headerLabel.Text="会社名 / 部署"; Field(headerLabel,LeftX,HeaderLabelTop,280); Field(header,LeftX,HeaderFieldTop,FieldWidth);
             department.DropDownStyle=ComboBoxStyle.DropDownList; department.Items.AddRange(new object[] {"製造課 冷食", "製造課 ハムソー", "工務課", "商品開発課", "生産管理課", "総務課", "調達課", "品質保証部"}); Field(department,LeftX,HeaderFieldTop,FieldWidth); department.Visible=false;
             colorDepartment.DropDownStyle=ComboBoxStyle.DropDownList; colorDepartment.Items.AddRange(LabelCatalog.ColorDepartments); Field(colorDepartment,LeftX,HeaderFieldTop,FieldWidth); colorDepartment.Visible=false;
-            roleLabel.Text="役職"; Field(roleLabel,LeftX,128,280); Field(role,LeftX,RoleFieldTop,FieldWidth);
-            personLabel.Text="名前"; Field(personLabel,LeftX,174,280); Field(person,LeftX,PersonFieldTop,FieldWidth); person.MaxLength=20;
+            roleLabel.Text="役職"; Field(roleLabel,LeftX,RoleLabelTop,280); Field(role,LeftX,RoleFieldTop,FieldWidth);
+            personLabel.Text="名前"; Field(personLabel,LeftX,PersonLabelTop,280); Field(person,LeftX,PersonFieldTop,FieldWidth); person.MaxLength=20;
             // 氏名欄の直下。既存の全角→半角変換（Current / LabelRenderer）と同じ趣旨。
             personSpaceNote.Text="※全角スペースも半角スペースとして出力されます";
             personSpaceNote.ForeColor=Color.FromArgb(80,80,80);
-            Field(personSpaceNote,LeftX,214,280); personSpaceNote.Height=14;
-            numberLabel.Text="社員番号（コードに変換する内容）"; Field(numberLabel,LeftX,228,280); Field(number,LeftX,244,FieldWidth);
+            Field(personSpaceNote,LeftX,PersonNoteTop,280); personSpaceNote.Height=14;
+            numberLabel.Text="社員番号（コードに変換する内容）"; Field(numberLabel,LeftX,NumberLabelTop,280); Field(number,LeftX,NumberFieldTop,FieldWidth);
             SetupFontBox(headerFont, headerFontUnit); SetupFontBox(roleFont, roleFontUnit); SetupFontBox(personFont, personFontUnit); SetupFontBox(numberFont, numberFontUnit);
             headerFont.Top=HeaderFieldTop; headerFontUnit.Top=HeaderFieldTop;
             roleFont.Top=RoleFieldTop; roleFontUnit.Top=RoleFieldTop;
             personFont.Top=PersonFieldTop; personFontUnit.Top=PersonFieldTop;
-            numberFont.Top=244; numberFontUnit.Top=244;
-            digits.DropDownStyle=ComboBoxStyle.DropDownList; digits.Items.AddRange(new object[]{"数字4桁（Y含め5文字）","数字5桁（Y含め6文字）"}); Field(digits,LeftX,274,280); digits.SelectedIndex=0;
+            numberFont.Top=NumberFieldTop; numberFontUnit.Top=NumberFieldTop;
+            digits.DropDownStyle=ComboBoxStyle.DropDownList; digits.Items.AddRange(new object[]{"数字4桁（Y含め5文字）","数字5桁（Y含め6文字）"}); Field(digits,LeftX,ExtraRowTop,280); digits.SelectedIndex=0;
             Controls.Add(Caption("ラベルの内容（拡大表示）",PreviewX,6));
             preview.SetBounds(PreviewX,22,PreviewWidth,185); preview.BackColor=Color.White; preview.BorderStyle=BorderStyle.FixedSingle;
             preview.SizeMode=PictureBoxSizeMode.Zoom; Controls.Add(preview);
@@ -299,9 +310,9 @@ public MainForm(string settingsFile)
                 if(!legend) footerControls.Add(control);
             }
             person.HideSelection=false;
-            emphasize.Text="選択部分を大きく"; Field(emphasize,LeftX,274,170);
-            clearEmphasis.Text="解除"; Field(clearEmphasis,188,274,80);
-            emphasisGuide.SetBounds(LeftX,302,280,30); Controls.Add(emphasisGuide);
+            emphasize.Text="選択部分を大きく"; Field(emphasize,LeftX,ExtraRowTop,170);
+            clearEmphasis.Text="解除"; Field(clearEmphasis,188,ExtraRowTop,80);
+            emphasisGuide.SetBounds(LeftX,ExtraRowTop+FieldHeight+4,280,30); Controls.Add(emphasisGuide);
             emphasize.Click+=delegate { SetEmphasis(); };
             clearEmphasis.Click+=delegate { emphasisStart=-1; emphasisLength=0; UpdateEmphasisGuide(); UpdatePreview(); };
             person.TextChanged+=delegate { if(!changing) { emphasisStart=-1; emphasisLength=0; UpdateEmphasisGuide(); } };
@@ -374,9 +385,10 @@ public MainForm(string settingsFile)
             if(active<0) SwitchKind();
             Safe(delegate { foreach(string p in PrinterSettings.InstalledPrinters) printers.Items.Add(p); SyncPrinter(true); });
             FormClosed += delegate { if(preview.Image!=null) preview.Image.Dispose(); if(sample.Image!=null) sample.Image.Dispose(); document.Dispose(); placementBold.Dispose(); };
-            // 固定サイズ。起動直後から緑／青帯を出し、入力欄の PreferredHeight と前面化だけ整える。
+            // 固定サイズ。起動直後から緑／青帯を出し、入力欄の PreferredHeight と行間を整える。
             if(active>=0) UpdateNumberGuide();
             NormalizeInputHeights();
+            if(active>=0) { LayoutInputStack(LabelCatalog.Items[active]); UpdateFontControls(); }
             BringInputRowsToFront();
             garmentSummary.BringToFront();
             smallPlacement.BringToFront();
@@ -387,6 +399,8 @@ public MainForm(string settingsFile)
                 startupPlacementSynced=true;
                 UpdateNumberGuide();
                 NormalizeInputHeights();
+                LayoutInputStack(LabelCatalog.Items[active]);
+                UpdateFontControls();
                 BringInputRowsToFront();
                 garmentSummary.BringToFront();
                 smallPlacement.BringToFront();
@@ -410,6 +424,72 @@ public MainForm(string settingsFile)
             foreach(Control c in new Control[]{header,role,person,number,department,colorDepartment,
                 headerFont,roleFont,personFont,numberFont,headerFontUnit,roleFontUnit,personFontUnit,numberFontUnit})
                 c.BringToFront();
+        }
+        /// <summary>表示中の入力行を上から積み、PreferredHeight 後も見出しと枠が被らない行間を確保する。</summary>
+        void LayoutInputStack(LabelSpec spec) {
+            const int noteHeight = 14;
+            int y = HeaderLabelTop;
+            bool colorWithDept = colorDepartment.Visible && department.Visible;
+            bool colorAsHeader = colorDepartment.Visible && !department.Visible && !header.Visible;
+            bool sizeNumber = spec.Layout == "SizeNumber";
+
+            if(headerLabel.Visible) { headerLabel.Top = y; y += CaptionToField; }
+            if(department.Visible) {
+                department.Top = y; EnsurePreferredHeight(department);
+                y = department.Bottom + AfterFieldGap;
+            } else if(header.Visible && !sizeNumber) {
+                header.Top = y; EnsurePreferredHeight(header);
+                y = header.Bottom + AfterFieldGap;
+            } else if(colorAsHeader) {
+                colorDepartment.Top = y; EnsurePreferredHeight(colorDepartment);
+                y = colorDepartment.Bottom + AfterFieldGap;
+            } else if(headerLabel.Visible && !sizeNumber) {
+                y += FieldHeight + AfterFieldGap;
+            }
+
+            if(sizeNumber) {
+                if(roleLabel.Visible) { roleLabel.Top = y; y += CaptionToField; }
+                header.Top = y; EnsurePreferredHeight(header);
+                y = header.Bottom + AfterFieldGap;
+            } else if(roleLabel.Visible || role.Visible || colorWithDept) {
+                if(roleLabel.Visible) { roleLabel.Top = y; y += CaptionToField; }
+                if(role.Visible) {
+                    role.Top = y; EnsurePreferredHeight(role);
+                    y = role.Bottom + AfterFieldGap;
+                } else if(colorWithDept) {
+                    colorDepartment.Top = y; EnsurePreferredHeight(colorDepartment);
+                    y = colorDepartment.Bottom + AfterFieldGap;
+                } else {
+                    y += AfterFieldGap;
+                }
+            }
+
+            if(personLabel.Visible || person.Visible) {
+                if(personLabel.Visible) { personLabel.Top = y; y += CaptionToField; }
+                if(person.Visible) {
+                    person.Top = y; EnsurePreferredHeight(person);
+                    y = person.Bottom + 4;
+                }
+                if(personSpaceNote.Visible) {
+                    personSpaceNote.Top = y; personSpaceNote.Height = noteHeight;
+                    y = personSpaceNote.Bottom + AfterNoteGap;
+                } else y += AfterFieldGap - 4;
+            }
+
+            if(numberLabel.Visible || number.Visible) {
+                if(numberLabel.Visible) { numberLabel.Top = y; y += CaptionToField; }
+                if(number.Visible) {
+                    number.Top = y; EnsurePreferredHeight(number);
+                    y = number.Bottom + AfterFieldGap;
+                }
+            }
+
+            if(digits.Visible) { digits.Top = y; y = digits.Bottom + AfterFieldGap; }
+            if(emphasize.Visible) {
+                emphasize.Top = y; clearEmphasis.Top = y;
+                emphasisGuide.Top = emphasize.Bottom + 4;
+            }
+            BringInputRowsToFront();
         }
         void SetupFontBox(NumericUpDown box, Label unit) {
             box.Minimum=6; box.Maximum=120; box.DecimalPlaces=0; box.Increment=1; box.Value=18;
@@ -542,19 +622,12 @@ public MainForm(string settingsFile)
             string[] groups=LabelCatalog.ColorGroups(active);
             colorDepartment.Items.AddRange(groups);
             colorDepartment.Visible=groups.Length>0 && spec.Layout!="CohortName" && !spec.ColorFromDepartment; colorDepartment.SelectedItem=d.ColorDepartment;
-            colorDepartment.Top=HeaderFieldTop;
             if(groups.Length>0 && spec.Layout!="CohortName" && !spec.ColorFromDepartment) {
                 string caption=spec.ColorCaption+"（ラベル色）";
-                if(departments!=null) { colorDepartment.Top=PersonFieldTop; role.Visible=false; roleLabel.Visible=true; roleLabel.Text=caption; }
+                if(departments!=null) { role.Visible=false; roleLabel.Visible=true; roleLabel.Text=caption; }
                 else { header.Visible=false; headerLabel.Visible=true; headerLabel.Text=caption; }
             }
-            if(spec.Layout=="SizeNumber") { role.Visible=false; roleLabel.Visible=true; roleLabel.Text="その他サイズ（例：10L）"; header.Visible=true; header.Top=PersonFieldTop; header.ReadOnly=false; header.MaxLength=5; header.Text=d.Header; }
-            else {
-                header.Top=headerLabel.Visible?headerLabel.Top+(HeaderFieldTop-HeaderLabelTop):HeaderFieldTop;
-                EnsurePreferredHeight(header);
-            }
-            EnsurePreferredHeight(person); EnsurePreferredHeight(role); EnsurePreferredHeight(number);
-            BringInputRowsToFront();
+            if(spec.Layout=="SizeNumber") { role.Visible=false; roleLabel.Visible=true; roleLabel.Text="その他サイズ（例：10L）"; header.Visible=true; header.ReadOnly=false; header.MaxLength=5; header.Text=d.Header; }
             person.Visible=personLabel.Visible=personSpaceNote.Visible=spec.NeedsName;
             personLabel.Text=(spec.SurnameOnly || spec.Layout=="Surname"?"苗字":"名前")+(spec.Reading!=""?"（"+spec.Reading+"で入力）":spec.SurnameOnly || spec.Layout=="Surname"?"（苗字のみ印字）":"（フルネーム）");
             if(spec.InputCaption!="")personLabel.Text=spec.InputCaption;
@@ -563,6 +636,7 @@ public MainForm(string settingsFile)
             if(spec.NumberLength>0) numberLabel.Text=(spec.Layout=="NumberName" || spec.Layout=="CohortName"?"社員番号":"番号")+"（数字"+spec.NumberLength+"桁）";
             if(spec.Layout=="PrefixName") numberLabel.Text="丸数字の番号（1～50）";
 
+            LayoutInputStack(spec);
             UpdateNumberGuide();
             UpdateFontControls();
             document.DefaultPageSettings.Landscape=active==2 || active==3 || spec.Layout=="QR";
@@ -577,24 +651,16 @@ public MainForm(string settingsFile)
             number.MaxLength=active<2?count+1:active<4?LabelRenderer.NumberLimits[active]:spec.Layout=="QR"?6:spec.NumberLength>0?spec.NumberLength:10;
             if(active<2 && number.Text.Length>number.MaxLength) number.Text=number.Text.Substring(0,number.MaxLength);
             guide.Text="使用するラベル：白　｜　サイズ："+(active==0?"小（幅50mm・カット長24mm）":"大（幅50mm・カット長80mm）")+(active<2?"\r\nよつ葉のQRコード：Y＋数字"+count+"桁（例："+(count==5?"Y12345":"Y1234")+"／合計"+(count+1)+"文字）":"");
-            // 青帯: 形式を選んだら常に詳細な貼り付け先を出す（よつ葉の【選択中】行とは別枠）
+            // 青帯: 形式を選んだら常に詳細な貼り付け先を出す
             smallPlacement.Visible=true;
             smallPlacement.Text="貼り付け先："+spec.Placement;
             smallPlacement.Font=placementBold;
             smallPlacement.BackColor=bandBlue;
-            // 【選択中】対応表は active<2 限定にせず、同一顧客の全形式（夏服 HeadingName 含む）で出す
-            string selection=LabelCatalog.SelectionGuide(spec.Customer,active);
-            if(selection!="") {
-                largePlacement.Visible=true;
-                largePlacement.Text=selection;
-                largePlacement.Font=Font;
-                largePlacement.BackColor=BackColor;
-            } else {
-                largePlacement.Text=spec.Pending!=""?"要確認："+spec.Pending:spec.Note+(spec.ColorGuide!=""?(spec.Note!=""?" ／ ":"")+"色の指定："+spec.ColorGuide:"");
-                largePlacement.Visible=largePlacement.Text!="" && !(spec.Customer==10 || spec.Customer==14);
-                largePlacement.Font=Font;
-                largePlacement.BackColor=BackColor;
-            }
+            // よつ葉十勝の▶【選択中】対応表は出さない。注記／要確認のみ（緑帯 GarmentSummary は別途維持）。
+            largePlacement.Text=spec.Pending!=""?"要確認："+spec.Pending:spec.Note+(spec.ColorGuide!=""?(spec.Note!=""?" ／ ":"")+"色の指定："+spec.ColorGuide:"");
+            largePlacement.Visible=largePlacement.Text!="" && !(spec.Customer==10 || spec.Customer==14);
+            largePlacement.Font=Font;
+            largePlacement.BackColor=BackColor;
             if(active>=4) {
                 string color=LabelCatalog.ColorName(active,Current());
                 guide.Text=(color!=""?"使用するラベル："+color+"　｜　":"")+"サイズ："+(spec.UnknownSize?"未指定":spec.Small?"小（幅50mm・カット長24mm）":"大（幅50mm・カット長80mm）")+"\r\n"+(spec.Family=="MS PGothic"?"Pゴシック":spec.Family=="MS PMincho"?(spec.HeaderFamily!=""?"上段："+spec.HeaderFamily+"／下段P明朝":"P明朝"):"HG丸ゴシック")+(spec.StrictFont?"／氏名は20pt固定（収まらない場合は印刷できません）":"／文字の大きさは印字範囲に合わせて自動調整")+"／各欄右のptで変更可";
@@ -854,11 +920,11 @@ public MainForm(string settingsFile)
             if(yotsubaBand.IndexOf("小ネーム（QR）")<0 || yotsubaBand.IndexOf("大ネーム（QR）")<0)throw new Exception("よつ葉緑帯にQR区別が出ない "+yotsubaBand);
             if(LabelCatalog.ShortFormName("大ネーム（パート2）")!="パート・帽子")throw new Exception("パート2の緑帯短縮がパート・帽子でない");
             if(LabelCatalog.ShortFormName("大ネーム（資格）")!="大ネーム（資格）")throw new Exception("資格の緑帯短縮が想定と違う");
-            // 起動直後（顧客・形式を触る前）: 初期選択の緑帯＋貼り付け先＋【選択中】
+            // 起動直後（顧客・形式を触る前）: 初期選択の緑帯＋貼り付け先。【選択中】対応表は出さない。
             if(active!=0 || SelectedCustomerIndex!=0)throw new Exception("起動時の初期選択がよつ葉小ネームでない");
             if(!garmentSummary.Visible || garmentSummary.Height<=0 || garmentSummary.Text.IndexOf("小ネーム（QR）")<0)throw new Exception("起動直後に商品対応帯が出ない");
             if(!smallPlacement.Visible || smallPlacement.Text!="貼り付け先：黒下：左前" || smallPlacement.Height<=0)throw new Exception("起動直後に貼り付け先帯が出ない");
-            if(!largePlacement.Visible || largePlacement.Text.IndexOf("【選択中】")<0)throw new Exception("起動直後によつ葉の【選択中】行が出ない");
+            if(largePlacement.Text.IndexOf("【選択中】")>=0 || largePlacement.Text.IndexOf("▶")>=0)throw new Exception("起動直後によつ葉の【選択中】対応表が出ている");
             if(garmentSummary.Bottom>smallPlacement.Top || smallPlacement.Bottom>largePlacement.Top || largePlacement.Bottom>guide.Top)throw new Exception("起動直後の帯レイアウトが重なっている");
             SelectedCustomerIndex=76; Application.DoEvents();
             if(!garmentSummary.Visible || garmentSummary.Text!="白衣：大ネーム　白下：小ネーム")throw new Exception("十勝大福で商品対応帯が表示されない");
@@ -868,20 +934,19 @@ public MainForm(string settingsFile)
             SelectedCustomerIndex=1; Application.DoEvents();
             if(garmentSummary.Visible || garmentSummary.Height!=0)throw new Exception("1形式顧客で商品対応帯が残っている");
             if(!smallPlacement.Visible || smallPlacement.Text.IndexOf("貼り付け先：")!=0)throw new Exception("1形式顧客で貼り付け先帯が出ない");
-            // よつ葉: 緑帯＋青帯（貼り付け先）＋【選択中】行が共存すること（夏服 HeadingName でも消えない）
+            // よつ葉: 緑帯＋青帯（貼り付け先）は維持。▶【選択中】対応表は出さない（夏服含む）
             SelectedCustomerIndex=0; formats.SelectedIndex=0; Application.DoEvents();
             if(!garmentSummary.Visible || garmentSummary.Height<=0 || garmentSummary.Text.IndexOf("小ネーム（QR）")<0)throw new Exception("よつ葉で商品対応帯（QR）が出ない");
             if(!smallPlacement.Visible || smallPlacement.Text!="貼り付け先：黒下：左前" || smallPlacement.Height<=0)throw new Exception("よつ葉小ネームで貼り付け先帯が出ない");
-            if(!largePlacement.Visible || largePlacement.Text.IndexOf("小ネーム → 黒下【選択中】")<0)throw new Exception("よつ葉の【選択中】行が消えている");
-            if(largePlacement.Text.IndexOf("ブルゾン夏")<0)throw new Exception("よつ葉対応表に夏服行が出ない");
+            if(largePlacement.Text.IndexOf("【選択中】")>=0 || largePlacement.Text.IndexOf("▶")>=0)throw new Exception("よつ葉の【選択中】対応表が残っている");
             if(garmentSummary.Bottom>smallPlacement.Top || smallPlacement.Bottom>largePlacement.Top || largePlacement.Bottom>guide.Top)throw new Exception("よつ葉の帯レイアウトが重なっている");
             formats.SelectedIndex=1; Application.DoEvents();
-            if(smallPlacement.Text!="貼り付け先：白衣：左胸" || largePlacement.Text.IndexOf("大ネーム → 白衣【選択中】")<0)throw new Exception("よつ葉大ネームで貼り付け先／選択中が更新されない");
+            if(smallPlacement.Text!="貼り付け先：白衣：左胸")throw new Exception("よつ葉大ネームで貼り付け先が更新されない");
+            if(largePlacement.Text.IndexOf("【選択中】")>=0)throw new Exception("よつ葉大ネームで【選択中】対応表が出ている");
             formats.SelectedIndex=2; Application.DoEvents();
             if(LabelCatalog.Items[active].Format.IndexOf("夏服")<0)throw new Exception("よつ葉3形式目が夏服用ではない");
             if(!smallPlacement.Visible || smallPlacement.Text.IndexOf("貼り付け先：ブルゾン夏")!=0)throw new Exception("よつ葉夏服で貼り付け先帯が出ない");
-            if(!largePlacement.Visible || largePlacement.Text.IndexOf("ブルゾン夏【選択中】")<0)throw new Exception("よつ葉夏服で【選択中】が消える");
-            if(largePlacement.Text.IndexOf("小ネーム → 黒下")<0 || largePlacement.Text.IndexOf("大ネーム → 白衣")<0)throw new Exception("よつ葉夏服でQR対応行が消える");
+            if(largePlacement.Text.IndexOf("【選択中】")>=0 || largePlacement.Text.IndexOf("▶")>=0)throw new Exception("よつ葉夏服で【選択中】対応表が出ている");
             if(garmentSummary.Bottom>smallPlacement.Top || smallPlacement.Bottom>largePlacement.Top || largePlacement.Bottom>guide.Top)throw new Exception("よつ葉夏服の帯レイアウトが重なっている");
             // よつ葉東京工場: Excel r212–214（社名つなぎ＋白＋通行服）。形式名は大きさ欄に合わせる。
             int[] tokyo=LabelCatalog.ForCustomer(73);
@@ -941,6 +1006,18 @@ public MainForm(string settingsFile)
             if(header.Height<header.PreferredHeight) throw new Exception("会社名欄の高さがPreferredHeight未満で文字がクリップする "+header.Height+"<"+header.PreferredHeight);
             if(person.Visible && header.Height+2<person.Height) throw new Exception("会社名欄が氏名欄より低い "+header.Height+"<"+person.Height);
             if(headerLabel.Visible && header.Top+2<headerLabel.Bottom) throw new Exception("会社名ラベルが入力欄に重なって潰れて見える");
+            // 明日佳など多段入力: 部署枠と「苗字のふりがな」見出しが被らないこと
+            SelectedCustomerIndex=79; Application.DoEvents();
+            if(LabelCatalog.Items[active].Layout!="DeptFurigana") throw new Exception("明日佳の形式がDeptFuriganaでない");
+            if(!department.Visible || !roleLabel.Visible || !role.Visible || !person.Visible) throw new Exception("明日佳の入力欄が表示されていない");
+            if(roleLabel.Text.IndexOf("ふりがな")<0) throw new Exception("明日佳のふりがな見出しが出ていない");
+            if(roleLabel.Top<department.Bottom+4) throw new Exception("部署枠とふりがな見出しの上下余白が不足 "+department.Bottom+" / "+roleLabel.Top);
+            if(personLabel.Top<role.Bottom+4) throw new Exception("ふりがな欄と苗字見出しの上下余白が不足 "+role.Bottom+" / "+personLabel.Top);
+            if(department.Bounds.IntersectsWith(roleLabel.Bounds) || role.Bounds.IntersectsWith(personLabel.Bounds)) throw new Exception("明日佳の入力行が重なっている");
+            // 他の多段（部署＋役職＋氏名）も同様に行間を確保
+            SelectedCustomerIndex=2; formats.SelectedIndex=0; Application.DoEvents();
+            if(department.Visible && roleLabel.Visible && roleLabel.Top<department.Bottom+4) throw new Exception("Umios札幌で部署と役職見出しが近い");
+            SelectedCustomerIndex=0; Application.DoEvents();
             if(headerFont.Visible && header.Height+4<headerFont.Height) throw new Exception("会社名欄がptスピナーより低い "+header.Height+"<"+headerFont.Height);
             if(!personFont.Visible || !headerFont.Visible || !numberFont.Visible) throw new Exception("よつ葉のフォントサイズUIが表示されていない");
             if(roleFont.Visible) throw new Exception("よつ葉に役職ptが出ている");
@@ -1167,7 +1244,7 @@ public MainForm(string settingsFile)
             // Shown 後も起動時の貼り付け先帯が残ること
             if(active!=0 || !smallPlacement.Visible || smallPlacement.Text.IndexOf("貼り付け先：")!=0 || smallPlacement.Height<=0)throw new Exception("表示直後に貼り付け先帯が出ない");
             if(!garmentSummary.Visible || garmentSummary.Height<=0)throw new Exception("表示直後に商品対応帯が出ない");
-            if(!largePlacement.Visible || largePlacement.Text.IndexOf("【選択中】")<0)throw new Exception("表示直後に【選択中】行が出ない");
+            if(largePlacement.Text.IndexOf("【選択中】")>=0)throw new Exception("表示直後に【選択中】対応表が出ている");
             int initialHeight=ClientSize.Height;
             foreach(int row in new int[]{45,74,90,146,152,153,99,20,144,129}) {
                 kinds.SelectedIndex=KindForRow(row); LabelSpec spec=LabelCatalog.Items[active];
