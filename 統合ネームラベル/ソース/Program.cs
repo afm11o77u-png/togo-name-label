@@ -673,11 +673,11 @@ public MainForm(string settingsFile)
                 smallPlacement.Text="貼り付け先："+spec.Placement;
                 smallPlacement.Font=placementBold;
                 smallPlacement.BackColor=bandBlue;
-                if(active<2) {
-                    // 【選択中】行は貼り付け先帯の下に残す（2行分を1ラベルにまとめる）
+                // 【選択中】対応表は active<2 限定にせず、同一顧客の全形式（夏服 HeadingName 含む）で出す
+                string selection=LabelCatalog.SelectionGuide(spec.Customer,active);
+                if(selection!="") {
                     largePlacement.Visible=true;
-                    largePlacement.Text=(active==0?"▶ 小ネーム → 黒下【選択中】":"　小ネーム → 黒下")
-                        +"\r\n"+(active==1?"▶ 大ネーム → 白衣【選択中】":"　大ネーム → 白衣");
+                    largePlacement.Text=selection;
                     largePlacement.Font=Font;
                     largePlacement.BackColor=BackColor;
                 } else {
@@ -685,10 +685,10 @@ public MainForm(string settingsFile)
                     largePlacement.Visible=largePlacement.Text!="" && !(spec.Customer==10 || spec.Customer==14);
                     largePlacement.Font=Font;
                     largePlacement.BackColor=BackColor;
-                    if(active>=4) {
-                        string color=LabelCatalog.ColorName(active,Current());
-                        guide.Text=(color!=""?"使用するラベル："+color+"　｜　":"")+"サイズ："+(spec.UnknownSize?"未指定":spec.Small?"小（幅50mm・カット長24mm）":"大（幅50mm・カット長80mm）")+"\r\n"+(spec.Family=="MS PGothic"?"Pゴシック":spec.Family=="MS PMincho"?(spec.HeaderFamily!=""?"上段："+spec.HeaderFamily+"／下段P明朝":"P明朝"):"HG丸ゴシック")+(spec.StrictFont?"／氏名は20pt固定（収まらない場合は印刷できません）":"／文字の大きさは印字範囲に合わせて自動調整")+"／各欄右のptで変更可";
-                    }
+                }
+                if(active>=4) {
+                    string color=LabelCatalog.ColorName(active,Current());
+                    guide.Text=(color!=""?"使用するラベル："+color+"　｜　":"")+"サイズ："+(spec.UnknownSize?"未指定":spec.Small?"小（幅50mm・カット長24mm）":"大（幅50mm・カット長80mm）")+"\r\n"+(spec.Family=="MS PGothic"?"Pゴシック":spec.Family=="MS PMincho"?(spec.HeaderFamily!=""?"上段："+spec.HeaderFamily+"／下段P明朝":"P明朝"):"HG丸ゴシック")+(spec.StrictFont?"／氏名は20pt固定（収まらない場合は印刷できません）":"／文字の大きさは印字範囲に合わせて自動調整")+"／各欄右のptで変更可";
                 }
                 UpdateGarmentSummary();
                 ResizePlacementGuides();
@@ -956,14 +956,21 @@ public MainForm(string settingsFile)
             SelectedCustomerIndex=1; Application.DoEvents();
             if(garmentSummary.Visible || garmentSummary.Height!=0)throw new Exception("1形式顧客で商品対応帯が残っている");
             if(!smallPlacement.Visible || smallPlacement.Text.IndexOf("貼り付け先：")!=0)throw new Exception("1形式顧客で貼り付け先帯が出ない");
-            // よつ葉: 緑帯＋青帯（貼り付け先）＋【選択中】行が共存すること
+            // よつ葉: 緑帯＋青帯（貼り付け先）＋【選択中】行が共存すること（夏服 HeadingName でも消えない）
             SelectedCustomerIndex=0; formats.SelectedIndex=0; Application.DoEvents();
             if(!garmentSummary.Visible || garmentSummary.Height<=0 || garmentSummary.Text.IndexOf("小ネーム（QR）")<0)throw new Exception("よつ葉で商品対応帯（QR）が出ない");
             if(!smallPlacement.Visible || smallPlacement.Text!="貼り付け先：黒下：左前" || smallPlacement.Height<=0)throw new Exception("よつ葉小ネームで貼り付け先帯が出ない");
-            if(!largePlacement.Visible || largePlacement.Text.IndexOf("【選択中】")<0)throw new Exception("よつ葉の【選択中】行が消えている");
+            if(!largePlacement.Visible || largePlacement.Text.IndexOf("小ネーム → 黒下【選択中】")<0)throw new Exception("よつ葉の【選択中】行が消えている");
+            if(largePlacement.Text.IndexOf("ブルゾン夏")<0)throw new Exception("よつ葉対応表に夏服行が出ない");
             if(garmentSummary.Bottom>smallPlacement.Top || smallPlacement.Bottom>largePlacement.Top || largePlacement.Bottom>guide.Top)throw new Exception("よつ葉の帯レイアウトが重なっている");
             formats.SelectedIndex=1; Application.DoEvents();
             if(smallPlacement.Text!="貼り付け先：白衣：左胸" || largePlacement.Text.IndexOf("大ネーム → 白衣【選択中】")<0)throw new Exception("よつ葉大ネームで貼り付け先／選択中が更新されない");
+            formats.SelectedIndex=2; Application.DoEvents();
+            if(LabelCatalog.Items[active].Format.IndexOf("夏服")<0)throw new Exception("よつ葉3形式目が夏服用ではない");
+            if(!smallPlacement.Visible || smallPlacement.Text.IndexOf("貼り付け先：ブルゾン夏")!=0)throw new Exception("よつ葉夏服で貼り付け先帯が出ない");
+            if(!largePlacement.Visible || largePlacement.Text.IndexOf("ブルゾン夏【選択中】")<0)throw new Exception("よつ葉夏服で【選択中】が消える");
+            if(largePlacement.Text.IndexOf("小ネーム → 黒下")<0 || largePlacement.Text.IndexOf("大ネーム → 白衣")<0)throw new Exception("よつ葉夏服でQR対応行が消える");
+            if(garmentSummary.Bottom>smallPlacement.Top || smallPlacement.Bottom>largePlacement.Top || largePlacement.Bottom>guide.Top)throw new Exception("よつ葉夏服の帯レイアウトが重なっている");
             // よつ葉東京工場: Excel r212–214（社名つなぎ＋白＋通行服）。形式名は大きさ欄に合わせる。
             int[] tokyo=LabelCatalog.ForCustomer(73);
             if(tokyo.Length!=3) throw new Exception("よつ葉東京工場の形式数がExcelと違う "+tokyo.Length);
