@@ -19,7 +19,17 @@ namespace UnifiedLabels {
   public void Toggle(string name) {var old=new List<string>(Favorites);if(!Favorites.Remove(name))Favorites.Add(name);try{Save();}catch{Favorites.Clear();Favorites.AddRange(old);throw;}}
   public void RenameCustomer(string previous,string current){bool changed=false;foreach(List<string> items in new[]{Favorites,Recent}){int i=items.IndexOf(previous);if(i<0)continue;items[i]=current;changed=true;}if(changed)Save();}
   public void Save() {Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path)));XmlDocument d=new XmlDocument();XmlElement root=d.CreateElement("settings");d.AppendChild(root);foreach(string s in Favorites) {XmlElement n=d.CreateElement("favorite");n.InnerText=s;root.AppendChild(n);}foreach(string s in Recent) {XmlElement n=d.CreateElement("recent");n.InnerText=s;root.AppendChild(n);}foreach(var pair in offsets) {XmlElement n=d.CreateElement("offset");n.SetAttribute("key",pair.Key);n.SetAttribute("x",pair.Value.X.ToString(CultureInfo.InvariantCulture));n.SetAttribute("y",pair.Value.Y.ToString(CultureInfo.InvariantCulture));root.AppendChild(n);}string tmp=path+".tmp";d.Save(tmp);if(File.Exists(path))File.Replace(tmp,path,null);else File.Move(tmp,path);}
-  public static bool Matches(string name,string query) {string a=name.Normalize(NormalizationForm.FormKC).Replace(" ","").ToUpperInvariant();string b=query.Normalize(NormalizationForm.FormKC).Replace(" ","").ToUpperInvariant();return a.Contains(b);}
+  static string Compact(string value){return value.Normalize(NormalizationForm.FormKC).Replace(" ","").Replace("\u3000","");}
+  /// <summary>顧客名（および読み）に query が含まれるか。空 query は全件一致。全半角・かな・英字大小を区別しない。</summary>
+  public static bool Matches(string name,string query) {
+   if(string.IsNullOrEmpty(query)) return true;
+   CompareInfo comparer=CultureInfo.GetCultureInfo("ja-JP").CompareInfo;
+   const CompareOptions opts=CompareOptions.IgnoreCase|CompareOptions.IgnoreWidth|CompareOptions.IgnoreKanaType;
+   string needle=Compact(query);
+   if(needle.Length==0) return true;
+   if(comparer.IndexOf(Compact(name),needle,opts)>=0) return true;
+   return comparer.IndexOf(Compact(LabelCatalog.CustomerReading(name)),needle,opts)>=0;
+  }
  }
  public static partial class LabelCatalog {
   static readonly Dictionary<string,string> CustomerReadings=new Dictionary<string,string> {
@@ -162,7 +172,7 @@ namespace UnifiedLabels {
   readonly UserSettings settings;readonly TextBox query=new TextBox();readonly ComboBox filter=new ComboBox();readonly ListBox list=new ListBox();readonly Label count=new Label();readonly List<int> ids=new List<int>();public int SelectedCustomer=-1;
   public CustomerPicker(UserSettings s) {settings=s;Text="顧客を探す";Font=new Font("Yu Gothic UI",11);ClientSize=new Size(670,540);StartPosition=FormStartPosition.CenterParent;FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;MinimizeBox=false;
    AutoScaleDimensions=new SizeF(96,96);AutoScaleMode=AutoScaleMode.Dpi;
-   Controls.Add(new Label {Text="顧客名の一部を入力してください",Left=20,Top=15,Width=600,Height=25});
+   Controls.Add(new Label {Text="上の枠に入力すると、一致する顧客だけ下の一覧に残ります（読み・全半角可）",Left=20,Top=15,Width=630,Height=25});
    Panel searchFrame=new Panel {Left=20,Top=45,Width=420,Height=44,BackColor=Color.White,BorderStyle=BorderStyle.FixedSingle};
    query.BorderStyle=BorderStyle.None;query.SetBounds(10,9,398,26);query.Anchor=AnchorStyles.Left|AnchorStyles.Right|AnchorStyles.Top;searchFrame.Controls.Add(query);Controls.Add(searchFrame);
    filter.SetBounds(455,53,195,32);filter.DropDownStyle=ComboBoxStyle.DropDownList;filter.Items.AddRange(new object[]{"すべて","お気に入り","最近選んだ顧客"});Controls.Add(filter);
@@ -170,10 +180,11 @@ namespace UnifiedLabels {
    list.DrawItem+=delegate(object sender,DrawItemEventArgs e){e.DrawBackground();if(e.Index>=0){Rectangle bounds=e.Bounds;bounds.Inflate(-8,0);TextRenderer.DrawText(e.Graphics,list.Items[e.Index].ToString(),e.Font,bounds,e.ForeColor,TextFormatFlags.Left|TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis|TextFormatFlags.NoPrefix);}e.DrawFocusRectangle();};Controls.Add(list);
    Button star=new Button {Text="☆ お気に入り切替",Left=20,Top=485,Width=210,Height=35};Button ok=new Button {Text="この顧客を選ぶ",Left=300,Top=485,Width=190,Height=35};Button cancel=new Button {Text="閉じる",Left=510,Top=485,Width=140,Height=35,DialogResult=DialogResult.Cancel};Controls.AddRange(new Control[]{star,ok,cancel});CancelButton=cancel;AcceptButton=ok;
    query.TextChanged+=delegate{RefreshList();};filter.SelectedIndexChanged+=delegate{RefreshList();};ok.Click+=delegate{Choose();};list.DoubleClick+=delegate{Choose();};star.Click+=delegate{if(list.SelectedIndex<0)return;try {int selected=ids[list.SelectedIndex];settings.Toggle(LabelCatalog.Customers[selected]);RefreshList();int restored=ids.IndexOf(selected);if(restored>=0)list.SelectedIndex=restored;}catch(Exception ex){MessageBox.Show(this,ex.Message,"保存できませんでした");}};filter.SelectedIndex=0;
+   Shown+=delegate{query.Focus();query.SelectAll();};
   }
-  public void VerifyFilters(){query.Text="存在しない顧客000";if(ids.Count!=0)throw new Exception("空の検索結果の検証失敗");query.Text="ＵＭＩＯＳ";if(ids.Count<1)throw new Exception("顧客名検索の検証失敗");query.Text="";filter.SelectedIndex=1;foreach(int id in ids)if(!settings.Favorites.Contains(LabelCatalog.Customers[id]))throw new Exception("お気に入り絞込失敗");filter.SelectedIndex=2;foreach(int id in ids)if(!settings.Recent.Contains(LabelCatalog.Customers[id]))throw new Exception("履歴絞込失敗");filter.SelectedIndex=0;}
+  public void VerifyFilters(){query.Text="存在しない顧客000";if(ids.Count!=0)throw new Exception("空の検索結果の検証失敗");query.Text="ＵＭＩＯＳ";if(ids.Count<1)throw new Exception("顧客名検索の検証失敗");query.Text="よつ";int broad=ids.Count;if(broad<1)throw new Exception("読み仮名検索の検証失敗");query.Text="よつば";if(ids.Count<1||ids.Count>broad)throw new Exception("入力中の絞り込み検証失敗");query.Text="ヨツバ";if(ids.Count<1)throw new Exception("カタカナ読み検索の検証失敗");query.Text="";filter.SelectedIndex=1;foreach(int id in ids)if(!settings.Favorites.Contains(LabelCatalog.Customers[id]))throw new Exception("お気に入り絞込失敗");filter.SelectedIndex=2;foreach(int id in ids)if(!settings.Recent.Contains(LabelCatalog.Customers[id]))throw new Exception("履歴絞込失敗");filter.SelectedIndex=0;}
   void Choose(){if(list.SelectedIndex<0)return;SelectedCustomer=ids[list.SelectedIndex];DialogResult=DialogResult.OK;}
-  void RefreshList(){ids.Clear();list.Items.Clear();IEnumerable<string> names=filter.SelectedIndex==2?(IEnumerable<string>)settings.Recent:LabelCatalog.SortedCustomers();foreach(string n in names){int id=Array.IndexOf(LabelCatalog.Customers,n);if(id<0 || !UserSettings.Matches(n,query.Text) || (filter.SelectedIndex==1&&!settings.Favorites.Contains(n)))continue;ids.Add(id);list.Items.Add((settings.Favorites.Contains(n)?"★  ":"     ")+n+"   （"+LabelCatalog.ForCustomer(id).Length+"形式）");}count.Text=ids.Count==0?"該当する顧客がありません。検索文字や表示範囲を変更してください。":ids.Count+"件の顧客";if(ids.Count>0)list.SelectedIndex=0;}
+  void RefreshList(){int keep=list.SelectedIndex>=0&&list.SelectedIndex<ids.Count?ids[list.SelectedIndex]:-1;ids.Clear();list.BeginUpdate();list.Items.Clear();IEnumerable<string> names=filter.SelectedIndex==2?(IEnumerable<string>)settings.Recent:LabelCatalog.SortedCustomers();foreach(string n in names){int id=Array.IndexOf(LabelCatalog.Customers,n);if(id<0 || !UserSettings.Matches(n,query.Text) || (filter.SelectedIndex==1&&!settings.Favorites.Contains(n)))continue;ids.Add(id);list.Items.Add((settings.Favorites.Contains(n)?"★  ":"     ")+n+"   （"+LabelCatalog.ForCustomer(id).Length+"形式）");}list.EndUpdate();count.Text=ids.Count==0?"該当する顧客がありません。検索文字や表示範囲を変更してください。":ids.Count+"件の顧客（一致したもののみ）";int restored=keep>=0?ids.IndexOf(keep):-1;if(restored>=0)list.SelectedIndex=restored;else if(ids.Count>0)list.SelectedIndex=0;}
  }
  public sealed class OffsetDialog:Form {
   readonly NumericUpDown x=new NumericUpDown(),y=new NumericUpDown();readonly PictureBox picture=new PictureBox();readonly Func<PrintOffset,Bitmap> render;public PrintOffset Value {get{return new PrintOffset(x.Value,y.Value);}}
