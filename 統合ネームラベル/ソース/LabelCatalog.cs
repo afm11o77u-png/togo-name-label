@@ -195,9 +195,9 @@ namespace UnifiedLabels
         // After mapping columns → app Y bands: upper center 12.5mm, lower center 37.5mm.
         const float LargeTwoRowUpperYMm=0f, LargeTwoRowUpperHeightMm=25f;
         const float LargeTwoRowLowerYMm=25f, LargeTwoRowLowerHeightMm=25f;
-        // Excel「弁釜 4/5/6文字」「弁釜　実習生」: col1=2336 / col0=3584 of 5920 → ≈19.73+30.27mm (not 25+25).
-        // Customer 72 only (kinds 129/130/222). Keeps 大汎用２段 equal bands unchanged.
-        const float BenGamaUpperHeightMm=19.73f, BenGamaLowerYMm=19.73f, BenGamaLowerHeightMm=30.27f;
+        // Excel 弁釜列幅は mm ではなく 8.5+13.38=21.88 → 実寸50mm。上段≈19.42 / 下段≈30.58。
+        // Customer 72 only (kinds 129/130/222). 大汎用２段の25+25は未変更。描画は上段下揃え・下段上揃え。
+        const float BenGamaUpperHeightMm=19.42f, BenGamaLowerYMm=19.42f, BenGamaLowerHeightMm=30.58f;
         static void TwoRowBands(LabelSpec s,Size mm,out RectangleF upper,out RectangleF lower) {
             if(s.Small) { upper=Mm(1,2,mm.Width-2,7); lower=Mm(1,9,mm.Width-2,14); }
             else if(s.Customer==72) {
@@ -211,13 +211,15 @@ namespace UnifiedLabels
         public static void Line(Graphics g,string text,string family,RectangleF area,float maximum,bool strict)
         { Line(g,text,family,area,maximum,strict,StringAlignment.Center); }
         public static void Line(Graphics g,string text,string family,RectangleF area,float maximum,bool strict,StringAlignment align)
+        { Line(g,text,family,area,maximum,strict,align,StringAlignment.Center); }
+        public static void Line(Graphics g,string text,string family,RectangleF area,float maximum,bool strict,StringAlignment align,StringAlignment lineAlign)
         {
             if(String.IsNullOrWhiteSpace(text)) return;
             float size=strict?maximum:Fit(g,text,family,area,maximum);
             using(Font f=new Font(family,size*100f/72f,StyleFor(family),GraphicsUnit.Pixel))
             using(StringFormat format=new StringFormat(StringFormat.GenericTypographic)) {
                 format.FormatFlags|=StringFormatFlags.NoWrap;
-                format.Alignment=align; format.LineAlignment=StringAlignment.Center;
+                format.Alignment=align; format.LineAlignment=lineAlign;
                 g.DrawString(text,f,Brushes.Black,area,format);
             }
         }
@@ -301,8 +303,14 @@ namespace UnifiedLabels
             if(s.Layout=="HeadingName" || s.Layout=="NumberName" || s.Layout=="CohortName" || s.Layout=="CompanyCodeName") {
                 string top=s.Layout=="HeadingName"?s.Heading:s.NumberPrefix+d.Number;
                 if(s.Layout=="CompanyCodeName") top=s.Heading+" "+(d.Number.Length==5?d.Number.Substring(0,1)+"-"+d.Number.Substring(1,2)+"-"+d.Number.Substring(3,2):d.Number);
-                Line(g,top,s.HeaderFamily!=""?s.HeaderFamily:s.Family,upper,s.HeadingFont>0?s.HeadingFont:s.Layout=="HeadingName"?12:18,false,upperAlign);
-                Line(g,name,s.Family,lower,maximum,s.StrictFont);
+                if(s.Customer==72) {
+                    // 弁釜 Excel: 上段下揃え・下段上揃え（帯内の縦中央ではない）。
+                    Line(g,top,s.HeaderFamily!=""?s.HeaderFamily:s.Family,upper,s.HeadingFont>0?s.HeadingFont:18,false,upperAlign,StringAlignment.Far);
+                    Line(g,name,s.Family,lower,maximum,s.StrictFont,StringAlignment.Center,StringAlignment.Near);
+                } else {
+                    Line(g,top,s.HeaderFamily!=""?s.HeaderFamily:s.Family,upper,s.HeadingFont>0?s.HeadingFont:s.Layout=="HeadingName"?12:18,false,upperAlign);
+                    Line(g,name,s.Family,lower,maximum,s.StrictFont);
+                }
             } else if(s.Layout=="SplitNumber") {
                 Line(g,d.Number,s.Family,Mm(1,1,23,22),36);
                 Line(g,d.Number,s.Family,Mm(26,1,23,22),36);
