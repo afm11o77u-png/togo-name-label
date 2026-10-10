@@ -15,7 +15,7 @@ namespace UnifiedLabels
         public string Family = "HG丸ｺﾞｼｯｸM-PRO";
         public int Rows = 1;
         public readonly string[] Texts = new string[] { "", "", "" };
-        public readonly float[] Sizes = new float[] { 26f, 20f, 20f };
+        public readonly float[] Sizes = new float[] { 26f, 26f, 26f };
         /// <summary>段内の左右オフセット(mm)。0＝横中央。正で右へ。</summary>
         public readonly float[] OffsetXMm = new float[] { 0f, 0f, 0f };
         /// <summary>段内の上下オフセット(mm)。0＝縦中央。正で下へ。</summary>
@@ -43,6 +43,8 @@ namespace UnifiedLabels
         public const float MaxRowOffsetMm = 20f;
 
         public static Size Millimetres(bool small) { return small ? new Size(50, 24) : new Size(80, 50); }
+        /// <summary>ラベルサイズごとの既定pt（段数によらない）。大48／小26。</summary>
+        public static float DefaultSizePt(bool small) { return small ? 26f : 48f; }
         public static string FamilyName(string display) { return display == "MS Pゴシック" ? "MS PGothic" : "HG丸ｺﾞｼｯｸM-PRO"; }
         public static string FamilyDisplay(string family) { return family == "MS PGothic" ? "MS Pゴシック" : "丸ゴシック"; }
         public static string OffsetKey(string printer, bool small)
@@ -69,30 +71,43 @@ namespace UnifiedLabels
             return Millimetres(small).Height / (float)n;
         }
 
+        /// <summary>段の描画・Fit用領域（左右は余白込み、高さは等分帯）。</summary>
+        public static RectangleF BandArea(bool small, int rows, int index)
+        {
+            Size mm = Millimetres(small);
+            int n = Math.Max(1, Math.Min(3, rows));
+            float bandHmm = mm.Height / (float)n;
+            return Mm(MarginMm, index * bandHmm, mm.Width - 2 * MarginMm, bandHmm);
+        }
+
+        /// <summary>指定ptを上限に、顧客ラベルと同じ LabelCatalog.Fit で段帯へ収める。</summary>
+        public static float FittedSize(Graphics g, GenericLabelData d, int index)
+        {
+            string text = RowText(d, index);
+            return LabelCatalog.Fit(g, text, d.Family, BandArea(d.Small, d.Rows, index), d.Sizes[index]);
+        }
+
         /// <summary>画面プレビュー・印刷プレビュー・印刷で共有する描画。</summary>
         public static void Draw(Graphics g, GenericLabelData d)
         {
-            Size mm = Millimetres(d.Small);
-            RectangleF frame = Mm(MarginMm, MarginMm, mm.Width - 2 * MarginMm, mm.Height - 2 * MarginMm);
             int n = Math.Max(1, Math.Min(3, d.Rows));
-            float bandH = (mm.Height / (float)n) / 0.254f;
             using (StringFormat format = new StringFormat(StringFormat.GenericTypographic))
             {
-                format.FormatFlags |= StringFormatFlags.NoWrap | StringFormatFlags.MeasureTrailingSpaces;
+                // Fit と同じく NoWrap のみ（顧客 Line と揃える）。PointF 描画は Mono 向け。
+                format.FormatFlags |= StringFormatFlags.NoWrap;
                 for (int i = 0; i < n; i++)
                 {
                     string text = RowText(d, i);
                     if (String.IsNullOrWhiteSpace(text)) continue;
-                    using (Font f = MakeFont(d.Family, d.Sizes[i]))
+                    RectangleF band = BandArea(d.Small, d.Rows, i);
+                    float size = FittedSize(g, d, i);
+                    using (Font f = MakeFont(d.Family, size))
                     {
-                        float textH = f.GetHeight(g);
-                        float textW = g.MeasureString(text, f, new PointF(), format).Width;
-                        float bandTop = i * bandH;
+                        SizeF measured = g.MeasureString(text, f, new PointF(), format);
                         float ox = d.OffsetXMm[i] / 0.254f;
                         float oy = d.OffsetYMm[i] / 0.254f;
-                        // 帯内・枠内で横中央／縦中央を基準にオフセット（PointF描画。Mono向け）。
-                        float x = frame.Left + (frame.Width - textW) / 2f + ox;
-                        float y = bandTop + (bandH - textH) / 2f + oy;
+                        float x = band.Left + (band.Width - measured.Width) / 2f + ox;
+                        float y = band.Top + (band.Height - measured.Height) / 2f + oy;
                         g.DrawString(text, f, Brushes.Black, new PointF(x, y), format);
                     }
                 }
@@ -111,37 +126,28 @@ namespace UnifiedLabels
                 if (Math.Abs(d.OffsetXMm[i]) > MaxRowOffsetMm || Math.Abs(d.OffsetYMm[i]) > MaxRowOffsetMm)
                     return (i + 1) + "段目の位置調整は±" + MaxRowOffsetMm.ToString("0") + "mm以内にしてください。";
             }
-            Size mm = Millimetres(d.Small);
-            RectangleF frame = Mm(MarginMm, MarginMm, mm.Width - 2 * MarginMm, mm.Height - 2 * MarginMm);
-            float bandH = (mm.Height / (float)n) / 0.254f;
             using (Bitmap probe = new Bitmap(1, 1))
             using (Graphics g = Graphics.FromImage(probe))
             using (StringFormat format = new StringFormat(StringFormat.GenericTypographic))
             {
-                format.FormatFlags |= StringFormatFlags.NoWrap | StringFormatFlags.MeasureTrailingSpaces;
+                format.FormatFlags |= StringFormatFlags.NoWrap;
                 for (int i = 0; i < n; i++)
                 {
                     string text = RowText(d, i);
-                    using (Font f = MakeFont(d.Family, d.Sizes[i]))
+                    RectangleF band = BandArea(d.Small, d.Rows, i);
+                    float size = FittedSize(g, d, i);
+                    using (Font f = MakeFont(d.Family, size))
                     {
                         SizeF measured = g.MeasureString(text, f, new PointF(), format);
-                        float textH = f.GetHeight(g);
-                        float textW = measured.Width;
-                        if (textH > bandH + 0.5f)
-                            return (i + 1) + "段目の文字サイズが大きすぎて段の高さに収まりません。";
-                        float bandTop = i * bandH;
-                        float bandBottom = bandTop + bandH;
                         float ox = d.OffsetXMm[i] / 0.254f;
                         float oy = d.OffsetYMm[i] / 0.254f;
-                        float x = frame.Left + (frame.Width - textW) / 2f + ox;
-                        float y = bandTop + (bandH - textH) / 2f + oy;
-                        if (x < frame.Left - 0.5f || x + textW > frame.Right + 0.5f)
-                            return (i + 1) + "段目の文字が左右にはみ出します。文字を短くするか左右位置を調整してください。";
-                        if (y < bandTop - 0.5f || y + textH > bandBottom + 0.5f)
-                            return (i + 1) + "段目の文字が段の上下にはみ出します。文字サイズを小さくするか上下位置を調整してください。";
-                        // ラベル外縁（余白）も超えないこと
-                        if (y < frame.Top - 0.5f || y + textH > frame.Bottom + 0.5f)
-                            return (i + 1) + "段目の文字が枠に収まりません。";
+                        float x = band.Left + (band.Width - measured.Width) / 2f + ox;
+                        float y = band.Top + (band.Height - measured.Height) / 2f + oy;
+                        // 自動縮小後でも段内オフセットではみ出す場合のみ拒否（長い文字自体は Fit で吸収）。
+                        if (x < band.Left - 0.5f || x + measured.Width > band.Right + 0.5f)
+                            return (i + 1) + "段目の文字が左右にはみ出します。左右位置を調整するか文字を短くしてください。";
+                        if (y < band.Top - 0.5f || y + measured.Height > band.Bottom + 0.5f)
+                            return (i + 1) + "段目の文字が段の上下にはみ出します。上下位置を調整してください。";
                     }
                 }
             }
@@ -280,7 +286,7 @@ namespace UnifiedLabels
             ApplyDraftToControls();
             UpdateRowVisibility();
 
-            sizeBox.SelectedIndexChanged += delegate { if (!changing) { SaveControlsToDraft(); ApplySizeDefaultsIfNeeded(); LoadPapers(true); UpdatePreview(); } };
+            sizeBox.SelectedIndexChanged += delegate { if (!changing) { SaveControlsToDraft(); ApplySizeDefaults(); LoadPapers(true); UpdatePreview(); } };
             fontBox.SelectedIndexChanged += delegate { if (!changing) { SaveControlsToDraft(); UpdatePreview(); } };
             rowsBox.SelectedIndexChanged += delegate { if (!changing) { SaveControlsToDraft(); UpdateRowVisibility(); UpdatePreview(); } };
             for (int i = 0; i < 3; i++)
@@ -338,19 +344,13 @@ namespace UnifiedLabels
             box.Value = 0;
         }
 
-        void ApplySizeDefaultsIfNeeded()
+        void ApplySizeDefaults()
         {
-            // サイズ切替時は未入力の段だけ既定ptを入れる（入力済みは保持）。
-            bool empty = true;
-            for (int i = 0; i < draft.Rows; i++) if (!String.IsNullOrWhiteSpace(draft.Texts[i])) empty = false;
-            if (!empty) return;
-            float one = draft.Small ? 26f : 48f;
-            float multi = draft.Small ? 18f : 28f;
-            draft.Sizes[0] = draft.Rows == 1 ? one : multi;
-            draft.Sizes[1] = multi;
-            draft.Sizes[2] = multi;
+            // 大/小切替時は各段の上限ptを既定（大48／小26）へ戻す。段数には依存しない。
+            float pt = GenericLabelRenderer.DefaultSizePt(draft.Small);
+            for (int i = 0; i < 3; i++) draft.Sizes[i] = pt;
             changing = true;
-            for (int i = 0; i < 3; i++) rowSizes[i].Value = (decimal)Math.Max(6, Math.Min(120, draft.Sizes[i]));
+            for (int i = 0; i < 3; i++) rowSizes[i].Value = (decimal)pt;
             changing = false;
         }
 
@@ -398,7 +398,8 @@ namespace UnifiedLabels
             guide.Text = (draft.Small
                 ? "サイズ：小（幅50mm・カット長24mm）　｜　"
                 : "サイズ：大（幅50mm・カット長80mm／表示は80×50mm）　｜　")
-                + bandNote + "　｜　左右・上下 0＝段の中央　｜　自動縮小なし";
+                + bandNote + "　｜　左右・上下 0＝段の中央　｜　ptは上限（枠内へ自動縮小）　｜　既定 "
+                + GenericLabelRenderer.DefaultSizePt(draft.Small).ToString("0") + "pt";
         }
 
         string CurrentOffsetKey()
@@ -602,13 +603,11 @@ namespace UnifiedLabels
                 draft.Small = small;
                 draft.Family = family;
                 draft.Rows = rows;
+                float def = GenericLabelRenderer.DefaultSizePt(small);
                 for (int i = 0; i < 3; i++)
                 {
                     draft.Texts[i] = i < rows ? ("テスト" + (i + 1)) : "保持確認" + (i + 1);
-                    // 小3段は枠が狭いため検証用ptを控えめにする（実機フォント差も吸収）。
-                    draft.Sizes[i] = small
-                        ? (rows == 1 ? 20f : rows == 2 ? 12f : 9f)
-                        : (rows == 1 ? 36f : rows == 2 ? 22f : 16f);
+                    draft.Sizes[i] = def;
                     draft.OffsetXMm[i] = 0f;
                     draft.OffsetYMm[i] = 0f;
                 }
@@ -634,6 +633,36 @@ namespace UnifiedLabels
                     PrintPage(this, new PrintPageEventArgs(g, new Rectangle(0, 0, 400, 400), new Rectangle(0, 0, 400, 400), document.DefaultPageSettings));
                     b.Save(Path.Combine(folder, "print-" + (small ? "s" : "l") + "-" + rows + ".png"));
                 }
+            }
+
+            // 大/小切替で各段ptが既定（48/26）へ戻ること
+            draft.Small = true;
+            draft.Rows = 2;
+            draft.Sizes[0] = 12f; draft.Sizes[1] = 14f; draft.Sizes[2] = 16f;
+            ApplyDraftToControls();
+            sizeBox.SelectedIndex = 0; // 大
+            if (draft.Sizes[0] != 48f || draft.Sizes[1] != 48f || draft.Sizes[2] != 48f
+                || rowSizes[0].Value != 48 || rowSizes[1].Value != 48 || rowSizes[2].Value != 48)
+                throw new Exception("大へ切替時の既定48pt反映失敗");
+            sizeBox.SelectedIndex = 1; // 小
+            if (draft.Sizes[0] != 26f || draft.Sizes[1] != 26f || draft.Sizes[2] != 26f
+                || rowSizes[0].Value != 26 || rowSizes[1].Value != 26 || rowSizes[2].Value != 26)
+                throw new Exception("小へ切替時の既定26pt反映失敗");
+
+            // 長い文字は自動縮小で通る（従来のはみ出し拒否はしない）
+            draft.Small = true;
+            draft.Rows = 1;
+            draft.Family = "MS PGothic";
+            draft.Texts[0] = "はみ出し確認用のとても長い文字列ABCDEFG";
+            draft.Sizes[0] = 26f;
+            draft.OffsetXMm[0] = 0; draft.OffsetYMm[0] = 0;
+            if (GenericLabelRenderer.Validate(draft) != null)
+                throw new Exception("自動縮小後も長い文字が拒否された: " + GenericLabelRenderer.Validate(draft));
+            using (Bitmap probe = new Bitmap(1, 1))
+            using (Graphics g = Graphics.FromImage(probe))
+            {
+                float fitted = GenericLabelRenderer.FittedSize(g, draft, 0);
+                if (fitted >= 26f - 0.01f) throw new Exception("長い文字で自動縮小されていません: " + fitted);
             }
 
             // 段内位置：初期は中央(0,0)、変更がプレビューに反映、非表示段は保持
@@ -680,22 +709,26 @@ namespace UnifiedLabels
             rowsBox.SelectedIndex = 2; // 3段
             if (rowTexts[1].Text != "中" || rowTexts[2].Text != "下") throw new Exception("段数復帰で入力復元失敗");
 
-            // 空行・はみ出し
+            // 空行／段内オフセットによるはみ出し
             draft.Rows = 2; draft.Texts[0] = "あり"; draft.Texts[1] = "";
+            draft.Sizes[0] = 26; draft.Sizes[1] = 26;
             if (GenericLabelRenderer.Validate(draft) == null || !GenericLabelRenderer.Validate(draft).Contains("2段目"))
                 throw new Exception("空行検証失敗");
-            draft.Texts[1] = "はみ出し確認用のとても長い文字列ABCDEFG";
-            draft.Sizes[1] = 48;
+            draft.Texts[1] = "下段";
             draft.Small = true;
             draft.OffsetXMm[1] = 0; draft.OffsetYMm[1] = 0;
+            if (GenericLabelRenderer.Validate(draft) != null)
+                throw new Exception("通常2段が不正: " + GenericLabelRenderer.Validate(draft));
+            draft.OffsetXMm[1] = 20f;
             if (GenericLabelRenderer.Validate(draft) == null)
-                throw new Exception("はみ出し検証失敗");
+                throw new Exception("段内オフセットはみ出し検証失敗");
+            draft.OffsetXMm[1] = 0;
 
             // 印字位置オフセット反映（顧客と別キー）
             draft.Rows = 1;
             draft.Small = true;
             draft.Texts[0] = "オフセット";
-            draft.Sizes[0] = 18;
+            draft.Sizes[0] = 26;
             draft.OffsetXMm[0] = 0; draft.OffsetYMm[0] = 0;
             ApplyDraftToControls();
             using (Bitmap a = CreatePreview(new PrintOffset()))
@@ -717,7 +750,7 @@ namespace UnifiedLabels
                 throw new Exception("汎用オフセットの大小分離失敗");
 
             File.WriteAllText(Path.Combine(folder, "generic-verification.txt"),
-                "PASS: 等分帯・段内位置(初期中央)・大/小×フォント×1～3段・印刷経路・段数復帰・空行/はみ出し・印字オフセットキー分離。実プリンター印字・カットは未実施。",
+                "PASS: 自動縮小(Fit)・既定pt大48/小26・等分帯・段内位置・大/小×フォント×1～3段・印刷経路・段数復帰・空行/オフセットはみ出し・印字オフセットキー分離。実プリンター印字・カットは未実施。",
                 Encoding.UTF8);
         }
     }

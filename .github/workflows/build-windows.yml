@@ -13,6 +13,7 @@ on:
       - 'cursor/ben-gama-excel-realign-9ee6'
       - 'cursor/ben-gama-align-scale-9ee6'
       - 'cursor/generic-row-position-5a78'
+      - 'cursor/generic-autofit-defaults-5a78'
     paths:
       - '.github/workflows/build-windows.yml'
       - '統合ネームラベル/ソース/**'
