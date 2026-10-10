@@ -184,6 +184,17 @@ namespace UnifiedLabels
             }
         }
         static RectangleF Mm(float x,float y,float w,float h) { return new RectangleF(x/0.254f,y/0.254f,w/0.254f,h/0.254f); }
+        // Large 2-row (上下2段): upper band shifted +2.5mm toward center; lower band unchanged.
+        // Keep upper height so heading pt is not forced to shrink; bands may overlap slightly.
+        // Before: upper Y=3 H=13 (text center 9.5mm). After: upper Y=5.5 H=13 (text center 12mm).
+        const float LargeTwoRowUpperYMm=5.5f, LargeTwoRowUpperHeightMm=13f;
+        const float LargeTwoRowLowerYMm=16f, LargeTwoRowLowerHeightMm=33f;
+        const float LargeFixedUpperYMm=7.5f, LargeFixedUpperHeightMm=20f;
+        const float LargeSplitUpperYMm=4.5f, LargeSplitUpperHeightMm=23f;
+        static void TwoRowBands(LabelSpec s,Size mm,out RectangleF upper,out RectangleF lower) {
+            if(s.Small) { upper=Mm(1,2,mm.Width-2,7); lower=Mm(1,9,mm.Width-2,14); }
+            else { upper=Mm(1,LargeTwoRowUpperYMm,mm.Width-2,LargeTwoRowUpperHeightMm); lower=Mm(1,LargeTwoRowLowerYMm,mm.Width-2,LargeTwoRowLowerHeightMm); }
+        }
         public static void Line(Graphics g,string text,string family,RectangleF area,float maximum)
         { Line(g,text,family,area,maximum,false,StringAlignment.Center); }
         public static void Line(Graphics g,string text,string family,RectangleF area,float maximum,bool strict)
@@ -214,14 +225,14 @@ namespace UnifiedLabels
             if(s.Layout=="FixedSingle") { Line(g,s.Heading,s.Family,Mm(1,1,mm.Width-2,mm.Height-2),s.MaximumFont); return; }
             if(s.Layout=="Fixed") {
                 string[] lines=s.Heading.Split('\n');
-                Line(g,lines[0],s.Family,Mm(1,5,78,20),30);
+                Line(g,lines[0],s.Family,Mm(1,LargeFixedUpperYMm,78,LargeFixedUpperHeightMm),30);
                 Line(g,lines[1],s.Family,Mm(1,26,78,20),28); return;
             }
             float maximum=s.MaximumFont>0?s.MaximumFont:(s.Layout=="Surname" && !s.SurnameOnly?36:GenericSize(s.Small,name));
             if(s.SurnameSizing)maximum=!String.IsNullOrWhiteSpace(d.Role)?56:name.Length<=2?80:64;
             float heading=s.HeadingFont>0?s.HeadingFont:(s.Small?18:26);
             StringAlignment upperAlign=s.IndentUpper?StringAlignment.Near:StringAlignment.Center;
-            RectangleF upper=Mm(1,s.Small?2:3,mm.Width-2,s.Small?7:13), lower=Mm(1,s.Small?9:16,mm.Width-2,s.Small?14:33);
+            RectangleF upper, lower; TwoRowBands(s,mm,out upper,out lower);
             if(s.Layout=="DeptOnly"){Line(g,d.Header.Replace('　',' '),s.Family,Mm(1,1,mm.Width-2,mm.Height-2),maximum);return;}
             if(s.Layout=="DeptRoleName") {
                 Line(g,d.Header,s.Family,Mm(1,3,78,10),heading,false,upperAlign);
@@ -243,8 +254,9 @@ namespace UnifiedLabels
             if(s.Layout=="SplitCode") {Line(g,name,s.Family,Mm(1,1,23,22),maximum);Line(g,name,s.Family,Mm(26,1,23,22),maximum);return;}
             if(s.Layout=="DeptName" || s.Layout=="DeptNumberName") {
                 if(s.Layout=="DeptNumberName") {
-                    Line(g,d.Header.Replace('　',' '),s.Family,Mm(1,s.Small?2:3,(mm.Width-3)/2f,s.Small?7:13),heading,false,upperAlign);
-                    Line(g,d.Number,s.Family,Mm(mm.Width/2f+0.5f,s.Small?2:3,(mm.Width-3)/2f,s.Small?7:13),heading,false,upperAlign);
+                    float uy=s.Small?2:LargeTwoRowUpperYMm, uh=s.Small?7:LargeTwoRowUpperHeightMm;
+                    Line(g,d.Header.Replace('　',' '),s.Family,Mm(1,uy,(mm.Width-3)/2f,uh),heading,false,upperAlign);
+                    Line(g,d.Number,s.Family,Mm(mm.Width/2f+0.5f,uy,(mm.Width-3)/2f,uh),heading,false,upperAlign);
                 } else Line(g,d.Header.Replace('　',' '),s.Family,upper,heading,false,upperAlign);
                 Line(g,name,s.Family,lower,maximum,s.StrictFont); return;
             }
@@ -253,7 +265,8 @@ namespace UnifiedLabels
                 string first=name,second=name;
                 if(s.Layout=="NameParts") { int space=name.IndexOf(' '); first=space<0?name:name.Substring(0,space); second=space<0?"":name.Substring(space+1).Trim(); }
                 float height=(mm.Height-4)/2f;
-                Line(g,first,s.Family,Mm(1,2,mm.Width-2,height),s.Layout=="RepeatName"?maximum:GenericSize(s.Small,first));
+                float firstY=s.Small?2:LargeSplitUpperYMm, firstH=s.Small?height:LargeSplitUpperHeightMm;
+                Line(g,first,s.Family,Mm(1,firstY,mm.Width-2,firstH),s.Layout=="RepeatName"?maximum:GenericSize(s.Small,first));
                 Line(g,second,s.Family,Mm(1,mm.Height/2f+1,mm.Width-2,height),s.Layout=="RepeatName"?maximum:GenericSize(s.Small,second)); return;
             }
             if(s.Layout=="InitialName" && !String.IsNullOrWhiteSpace(d.Role)) name+="("+d.Role.Trim()+")";

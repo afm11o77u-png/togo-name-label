@@ -55,7 +55,8 @@ namespace UnifiedLabels
                 bool small = kind == 0;
                 size = n <= 5 ? (small ? 24 : 38) : n == 6 ? (small ? 20 : 32) : n == 7 ? (small ? 16 : 26) : (small ? 13 : 25);
                 y = n <= 5 ? (small ? 53 : 113) : n <= 7 ? (small ? 58 : 118) : (small ? 65 : 125);
-                Text(g, d.Header, rounded, small ? 16 : 26, 0, small ? 19 : 33);
+                // Large 2-row (kind 1): shift company/header down ~2.5mm (10 units of 0.01"); keep small and name Y unchanged.
+                Text(g, d.Header, rounded, small ? 16 : 26, 0, small ? 19 : 43);
             }
             else
             {
