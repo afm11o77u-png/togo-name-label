@@ -26,6 +26,7 @@ on:
       - 'cursor/excel-font-band-sync-313d'
       - 'cursor/per-field-font-ui-4d1b'
       - 'cursor/customer-enter-select-fed5'
+      - 'cursor/window-resize-f0b9'
     paths:
       - '.github/workflows/build-windows.yml'
       - '統合ネームラベル/ソース/**'
