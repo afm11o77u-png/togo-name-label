@@ -31,7 +31,11 @@ on:
       - 'cursor/tokyo-space-note-f670'
       - 'cursor/form-placement-band-10fa'
       - 'cursor/excel-full-resync-28ae'
+<<<<<<< HEAD
       - 'cursor/startup-placement-be94'
+=======
+      - 'cursor/umios-role-font-pt-903f'
+>>>>>>> origin/main
     paths:
       - '.github/workflows/build-windows.yml'
       - '統合ネームラベル/ソース/**'

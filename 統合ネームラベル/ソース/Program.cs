@@ -872,6 +872,7 @@ public MainForm(string settingsFile)
             if(customers.Items.Count!=LabelCatalog.Customers.Length)throw new Exception("Enter確定後の全件復帰失敗");
             Show();person.Text="山田 太郎";number.Text="Y1234";UpdatePreview();Application.DoEvents();
             if(!personFont.Visible || !headerFont.Visible || !numberFont.Visible) throw new Exception("よつ葉のフォントサイズUIが表示されていない");
+            if(roleFont.Visible) throw new Exception("よつ葉に役職ptが出ている");
             decimal beforePerson=personFont.Value;
             if(LabelCatalog.PickFont(18,false,99)!=18 || LabelCatalog.PickFont(18,true,5)!=18 || LabelCatalog.PickFont(18,true,40)!=40) throw new Exception("PickFontの安全な既定復帰が壊れている");
             using(Bitmap a=CreatePreview(new PrintOffset())) {
@@ -882,6 +883,31 @@ public MainForm(string settingsFile)
                     if(!changed) throw new Exception("氏名フォントサイズ変更がプレビューに反映されていない");
                 }
             }
+            // Umios 大ネーム（QR）: Legacy（札幌）と Layout=QR（十勝）で役職ptが出てプレビューに効くこと
+            SelectedCustomerIndex=2; formats.SelectedIndex=0; Application.DoEvents();
+            if(active!=3 || LabelCatalog.Items[active].Layout!="Legacy") throw new Exception("Umios札幌・大ネーム（QR）の形式が違う");
+            if(!role.Visible || !roleFont.Visible || !LabelCatalog.Items[active].UsesRoleFont) throw new Exception("Umios札幌の役職ptが出ていない");
+            role.Text="主任"; department.SelectedIndex=0; person.Text="山田 太郎"; number.Text="123456"; UpdatePreview();
+            using(Bitmap a=CreatePreview(new PrintOffset())) {
+                changing=false; decimal beforeRole=roleFont.Value; roleFont.Value=beforeRole>=30?beforeRole-12:beforeRole+12;
+                if(!Current().RoleFontSet || Current().RoleFontPt!=(float)roleFont.Value) throw new Exception("役職pt変更が明示フラグになっていない");
+                using(Bitmap b=CreatePreview(new PrintOffset())) {
+                    bool changed=false; for(int x=0;x<a.Width&&!changed;x+=3) for(int y=0;y<a.Height;y+=3) if(a.GetPixel(x,y)!=b.GetPixel(x,y)){changed=true;break;}
+                    if(!changed) throw new Exception("Umios札幌の役職pt変更がプレビューに反映されていない");
+                }
+            }
+            SelectedCustomerIndex=12; formats.SelectedIndex=0; Application.DoEvents();
+            if(LabelCatalog.Items[active].Layout!="QR" || !role.Visible || !roleFont.Visible) throw new Exception("Umios十勝の役職ptが出ていない");
+            role.Text="主任"; department.SelectedIndex=0; person.Text="山田 太郎"; number.Text="123456"; UpdatePreview();
+            using(Bitmap a=CreatePreview(new PrintOffset())) {
+                changing=false; decimal beforeRole=roleFont.Value; roleFont.Value=beforeRole>=30?beforeRole-12:beforeRole+12;
+                if(!Current().RoleFontSet) throw new Exception("十勝の役職pt変更が明示フラグになっていない");
+                using(Bitmap b=CreatePreview(new PrintOffset())) {
+                    bool changed=false; for(int x=0;x<a.Width&&!changed;x+=3) for(int y=0;y<a.Height;y+=3) if(a.GetPixel(x,y)!=b.GetPixel(x,y)){changed=true;break;}
+                    if(!changed) throw new Exception("Umios十勝の役職pt変更がプレビューに反映されていない");
+                }
+            }
+            SelectedCustomerIndex=0; formats.SelectedIndex=0; person.Text="山田 太郎"; number.Text="Y1234"; Application.DoEvents();
             // 入力のない固定ネームではpt UIを出さない
             for(int k=0;k<LabelCatalog.Items.Length;k++) {
                 LabelSpec spec=LabelCatalog.Items[k];
@@ -956,6 +982,7 @@ public MainForm(string settingsFile)
                 if(personFont.Visible!=spec.UsesPersonFont || numberFont.Visible!=spec.UsesNumberFont) throw new Exception("フォントサイズUIの切替失敗 "+k);
                 if(headerFont.Visible && !spec.UsesHeaderFont) throw new Exception("ヘッダーptが不要形式で表示 "+k);
                 if(roleFont.Visible && !spec.UsesRoleFont) throw new Exception("役職ptが不要形式で表示 "+k);
+                if(role.Visible && spec.UsesRoleFont && !roleFont.Visible) throw new Exception("役職欄があるのに役職ptが出ていない "+k);
                 number.Text="101"; if(LabelCatalog.ColorGroups(k).Length>0) colorDepartment.SelectedIndex=0; if(LabelCatalog.DepartmentNames(k)!=null) department.SelectedIndex=0;
                 for(int n=0;n<=20;n+=k<37?1:10) { person.Text=new string('山',n); if(status.Text.StartsWith("処理できません")) throw new Exception("新規描画失敗 "+k+"/"+n); }
                 person.Text=k==4?"山田":"山田 太郎";
