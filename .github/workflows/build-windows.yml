@@ -19,6 +19,7 @@ on:
       - 'cursor/customer-name-input-7b59'
       - 'cursor/remove-picker-star-7b59'
       - 'cursor/dan-size-align-update-914d'
+      - 'cursor/dan-size-resync-cc4d'
     paths:
       - '.github/workflows/build-windows.yml'
       - '統合ネームラベル/ソース/**'
