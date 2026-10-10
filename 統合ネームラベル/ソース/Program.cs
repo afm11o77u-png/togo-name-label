@@ -163,7 +163,7 @@ namespace UnifiedLabels
         static Label Caption(string s, int x, int y) { return new Label {Text=s,Left=x,Top=y,Width=300,Height=25}; }
         void Field(Control c, int x, int y, int width) { c.SetBounds(x,y,width,30); Controls.Add(c); }
         readonly UserSettings preferences;
-readonly Label offsetSummary=new Label(); readonly Button favorite=new Button(); PrintOffset temporaryOffset;
+readonly Label offsetSummary=new Label(); PrintOffset temporaryOffset;
 string OffsetKey { get { var spec=LabelCatalog.Items[active]; return document.PrinterSettings.PrinterName+"|"+(spec.SettingsIdentity!=""?spec.SettingsIdentity:LabelCatalog.Customers[spec.Customer]+"|"+spec.Format+"|"+spec.Small+"|"+spec.Placement); } }
 PrintOffset CurrentOffset() { return temporaryOffset??preferences.Get(OffsetKey); }
 public MainForm(string settingsFile)
@@ -177,9 +177,7 @@ public MainForm(string settingsFile)
             AutoScaleMode = AutoScaleMode.Dpi; ClientSize = new Size(1000,800);
             FormBorderStyle = FormBorderStyle.FixedSingle; MaximizeBox = false; StartPosition = FormStartPosition.CenterScreen;
             Label customerCaption=Caption("顧客",25,20);customerCaption.Width=95;Controls.Add(customerCaption); Field(customers,25,48,320);
-            favorite.Text="☆";Field(favorite,140,12,70);
             Button generic=new Button {Text="汎用ラベル"}; Field(generic,790,12,180);
-            favorite.Click+=delegate {Safe(delegate {preferences.Toggle(customers.Text);favorite.Text=preferences.Favorites.Contains(customers.Text)?"★":"☆";});};
             generic.Click+=delegate {using(GenericLabelForm dlg=new GenericLabelForm(preferences)) dlg.ShowDialog(this); UpdatePreview();};
             // メイン顧客欄：DropDown で直接入力し、Matches（名前・読み）で候補を絞る（別ダイアログ不要）
             formats.DropDownStyle=ComboBoxStyle.DropDownList;
@@ -363,7 +361,7 @@ public MainForm(string settingsFile)
 
             UpdateNumberGuide();
             document.DefaultPageSettings.Landscape=active==2 || active==3 || spec.Layout=="QR";
-            changing=false; favorite.Text=preferences.Favorites.Contains(customers.Text)?"★":"☆"; Safe(UpdateSample); Safe(LoadPapers); UpdatePreview();
+            changing=false; Safe(UpdateSample); Safe(LoadPapers); UpdatePreview();
         }
         void UpdateNumberGuide()
         {
