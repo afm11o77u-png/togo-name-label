@@ -742,7 +742,7 @@ namespace UnifiedLabels
             }
 
             // 顧客オフセットキーと混ざらないこと
-            string customerLike = "TestPrinter|よつ葉乳業㈱十勝工場|小ネーム（QR・黒下用）|True|黒下：左前";
+            string customerLike = "TestPrinter|よつ葉乳業㈱十勝工場|小ネーム（QR）|True|黒下：左前";
             if (keySmall == customerLike || keyLarge == customerLike) throw new Exception("顧客キーと衝突");
             preferences.Set(keySmall, new PrintOffset(1.5m, -0.5m));
             if (preferences.Get(customerLike).X != 0) throw new Exception("顧客オフセットへ混入");

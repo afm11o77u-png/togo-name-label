@@ -30,6 +30,7 @@ on:
       - 'cursor/garment-label-summary-c13d'
       - 'cursor/tokyo-space-note-f670'
       - 'cursor/form-placement-band-10fa'
+      - 'cursor/excel-full-resync-28ae'
     paths:
       - '.github/workflows/build-windows.yml'
       - '統合ネームラベル/ソース/**'

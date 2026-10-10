@@ -24,7 +24,8 @@ namespace UnifiedLabels {
   }
   public void VerifyLatest(string folder){
    Directory.CreateDirectory(folder);Show();
-   foreach(int row in new[]{97,102,105,156,159,162,163,164,173,174,175,176,187,193,194,195,200,204,207,216,227,231}){
+   // SourceRow は五十音順2（md5 ca88ea51…）の行番号
+   foreach(int row in new[]{222,233,235,33,78,226,227,228,140,12,161,10,120,199,174,165,171,109,48,157,77}){
     kinds.SelectedIndex=LatestRow(row);var spec=LabelCatalog.Items[active];
     if(department.Items.Count>0)department.SelectedIndex=0;
     if(colorDepartment.Items.Count>0)colorDepartment.SelectedIndex=0;
@@ -35,7 +36,7 @@ namespace UnifiedLabels {
     if(spec.Layout=="SplitCode")person.Text="M-23";
     if(spec.Layout=="OptionalHeading")header.Text="製造";
     if(spec.Layout=="InitialName")role.Text="太";
-    if(spec.Layout=="FreeText")person.Text=row==105?"タロウ":"LL";
+    if(spec.Layout=="FreeText")person.Text=row==235?"タロウ":"LL";
     if(spec.Reading=="ローマ字")person.Text="Yamada Taro";
     UpdatePreview();Need(!status.Text.StartsWith("処理できません"),"Preview error "+row+" "+status.Text);
     if(spec.Pending=="")Need(LabelRenderer.Validate(active,Current())==null,"Invalid example "+row+" "+LabelRenderer.Validate(active,Current()));
@@ -44,14 +45,14 @@ namespace UnifiedLabels {
     else Need(LabelCatalog.GarmentSummary(spec.Customer)=="","Garment summary should hide "+row);
     Need(smallPlacement.Visible && smallPlacement.Height>0 && smallPlacement.Text.StartsWith("貼り付け先：") && smallPlacement.Text.IndexOf(spec.Placement)>=0,"Placement band missing "+row);
     Need(smallPlacement.Bottom<=largePlacement.Top && largePlacement.Bottom<=guide.Top && status.Bottom<=ClientSize.Height,"Guide overlaps "+row);
-    if(row==156){Need(!colorDepartment.Visible,"Duplicate department selection");department.SelectedItem="洋菓子チーム";Need(LabelCatalog.ColorName(active,Current())=="赤","Department color not linked");}
-    if(row==97){Need(LabelCatalog.ColorName(active,Current())=="緑？","Fresh fish provisional color");header.Text="その他";Need(LabelCatalog.ColorName(active,Current())=="先方から指定","Unspecified department color");header.Text="鮮魚";}
-    if(row==173 || row==174 || row==175){Need(LabelCatalog.ColorName(active,Current()).Contains("？"),"Question mark lost");Need(LabelCatalog.Swatch(LabelCatalog.ColorName(active,Current()))==(row==174?Color.LightCoral:Color.LightSkyBlue),"Provisional swatch wrong");}
-    if(row==164){Need(LabelCatalog.ColorName(active,Current())=="先方から指定","Unknown color invents a color");Need(header.Visible&&!header.ReadOnly,"Department not editable");header.Text="";Need(LabelRenderer.Validate(active,Current())==null,"Optional department blocks print");header.Text="製造";}
-    if(row==187)Need(spec.Heading=="トテッポ工房" && spec.Layout=="HeadingName","TotepPo fixed header");
+    if(row==33){Need(!colorDepartment.Visible,"Duplicate department selection");department.SelectedItem="洋菓子チーム";Need(LabelCatalog.ColorName(active,Current())=="赤","Department color not linked");}
+    if(row==222){Need(LabelCatalog.ColorName(active,Current())=="緑？","Fresh fish provisional color");header.Text="その他";Need(LabelCatalog.ColorName(active,Current())=="先方から指定","Unspecified department color");header.Text="鮮魚";}
+    if(row==140 || row==12 || row==161){Need(LabelCatalog.ColorName(active,Current()).Contains("？"),"Question mark lost");Need(LabelCatalog.Swatch(LabelCatalog.ColorName(active,Current()))==(row==12?Color.LightCoral:Color.LightSkyBlue),"Provisional swatch wrong");}
+    if(row==228){Need(LabelCatalog.ColorName(active,Current())=="先方から指定","Unknown color invents a color");Need(header.Visible&&!header.ReadOnly,"Department not editable");header.Text="";Need(LabelRenderer.Validate(active,Current())==null,"Optional department blocks print");header.Text="製造";}
+    if(row==120)Need(spec.Heading=="トテッポ工房" && spec.Layout=="HeadingName","TotepPo fixed header");
     CaptureLatest(folder,"row-"+row);
-    if(row==102){role.Text="0";CaptureLatest(folder,"row-102-no-stars");role.Text="abc";Need(LabelRenderer.Validate(active,Current())!=null,"Invalid star count accepted");}
-    if(row==200){person.Text="M-X";Need(LabelRenderer.Validate(active,Current())!=null,"Invalid split code accepted");}
+    if(row==233){role.Text="0";CaptureLatest(folder,"row-233-no-stars");role.Text="abc";Need(LabelRenderer.Validate(active,Current())!=null,"Invalid star count accepted");}
+    if(row==171){person.Text="M-X";Need(LabelRenderer.Validate(active,Current())!=null,"Invalid split code accepted");}
    }
    int sapporoCohort=-1,asahikawaCohort=-1;
    for(int i=0;i<LabelCatalog.Items.Length;i++){if(LabelCatalog.Items[i].Layout!="CohortName")continue; if(LabelCatalog.Items[i].Format.Contains("札幌"))sapporoCohort=i; if(LabelCatalog.Items[i].Format.Contains("旭川"))asahikawaCohort=i;}
@@ -61,12 +62,12 @@ namespace UnifiedLabels {
     for(int n=1;n<=12;n++){role.Text=n.ToString();Need(LabelCatalog.ColorName(active,Current())==colors[(n-1)%4],"Cohort branch cycle");Need(LabelRenderer.Validate(active,Current())==null,"Cohort validation");}
     role.Text="5";CaptureLatest(folder,k==sapporoCohort?"cohort-sapporo":"cohort-asahikawa");
    }
-   kinds.SelectedIndex=LatestRow(24);person.Text="チャン ティ ハー ザン";number.Text="21";
+   kinds.SelectedIndex=LatestRow(56);person.Text="チャン ティ ハー ザン";number.Text="21";
    Need(LabelCatalog.NameForPrint(LabelCatalog.Items[active],person.Text)=="ﾁｬﾝ ﾃｨ ﾊｰ ｻﾞﾝ","Halfwidth kana conversion");CaptureLatest(folder,"halfwidth-kana");
    Need(LabelCatalog.Items[0].NeedsNumber && LabelCatalog.Items[1].NeedsNumber && LabelCatalog.Items[2].NeedsNumber && LabelCatalog.Items[3].NeedsNumber,"Legacy codes hidden");
    kinds.SelectedIndex=0;digits.SelectedIndex=1;number.Text="Y12345";digits.SelectedIndex=0;Need(number.Text=="Y1234","Yotsuba 5 to 4 truncation");
    Need(preferences.Get(OffsetKey).X==0,"Unexpected test adjustment");
-   File.WriteAllText(Path.Combine(folder,"latest-verification.txt"),"PASS: 131 customers / 226 formats; provisional colors and question marks; customer-specified unknown color; department color linkage; 3-line furigana; variable stars; Roman names; split alphanumeric codes; fixed TotepPo; Sapporo/Asahikawa cohort cycles 1..12; halfwidth katakana; incomplete templates blocked; existing QR inputs; no print jobs sent.",Encoding.UTF8);Hide();
+   File.WriteAllText(Path.Combine(folder,"latest-verification.txt"),"PASS: 131 customers / 227 formats; provisional colors and question marks; customer-specified unknown color; department color linkage; 3-line furigana; variable stars; Roman names; split alphanumeric codes; fixed TotepPo; Sapporo/Asahikawa cohort cycles 1..12; halfwidth katakana; incomplete templates blocked; existing QR inputs; no print jobs sent.",Encoding.UTF8);Hide();
   }
  }
 }
