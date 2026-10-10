@@ -20,6 +20,7 @@ on:
       - 'cursor/remove-picker-star-7b59'
       - 'cursor/dan-size-align-update-914d'
       - 'cursor/dan-size-resync-cc4d'
+      - 'cursor/dan-size-small-align-668a'
       - 'cursor/remove-favorite-star-7b59'
     paths:
       - '.github/workflows/build-windows.yml'
