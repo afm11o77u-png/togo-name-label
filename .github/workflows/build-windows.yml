@@ -23,7 +23,11 @@ on:
       - 'cursor/dan-size-small-align-668a'
       - 'cursor/dan-size-full-sync-6a71'
       - 'cursor/remove-favorite-star-7b59'
+<<<<<<< HEAD
       - 'cursor/excel-font-band-sync-313d'
+=======
+      - 'cursor/per-field-font-ui-4d1b'
+>>>>>>> 7f794d5 (全顧客の入力欄横にフォントサイズ(pt)調整を追加)
     paths:
       - '.github/workflows/build-windows.yml'
       - '統合ネームラベル/ソース/**'
