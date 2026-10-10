@@ -27,6 +27,35 @@ namespace UnifiedLabels
         { Customer=customer; Format=format; Small=small; Layout=layout; Family=family; Placement=placement; Heading=heading; Note=note; White=white; }
         public bool NeedsNumber { get { return Layout=="Legacy" || Layout=="QR" || Layout=="NumberName" || Layout=="SplitNumber" || Layout=="NumberOnly" || Layout=="SizeNumber" || Layout=="PrefixName" || Layout=="DeptNumberName" || Layout=="CohortName" || Layout=="CompanyCodeName"; } }
         public bool NeedsName { get { return Layout!="DeptOnly" && Layout!="Unavailable" && Layout!="SplitNumber" && Layout!="Fixed" && Layout!="FixedSingle" && Layout!="NumberOnly" && Layout!="SizeNumber" && Layout!="Blank"; } }
+        /// <summary>会社名／定型／部署など上段テキスト用のpt UIを出す形式。</summary>
+        public bool UsesHeaderFont {
+            get {
+                if(Layout=="Fixed" || Layout=="FixedSingle" || Layout=="Blank" || Layout=="Unavailable") return false;
+                if(Layout=="SizeNumber" || Layout=="SplitNumber" || Layout=="NumberOnly") return false;
+                if(Layout=="Name" || Layout=="Surname" || Layout=="FreeText" || Layout=="SplitCode" || Layout=="RepeatName" || Layout=="NameParts") return false;
+                if(Layout=="InitialName" || Layout=="InitialMixed" || Layout=="MixedName" || Layout=="PrefixName" || Layout=="CohortName" || Layout=="RoleName") return false;
+                if(Layout=="NumberName") return false;
+                return Layout=="Legacy" || Layout=="QR" || Layout=="HeadingName" || Layout=="DeptName" || Layout=="DeptNumberName"
+                    || Layout=="DeptOnly" || Layout=="OptionalHeading" || Layout=="DeptRoleName" || Layout=="DeptFurigana"
+                    || Layout=="StarRoman";
+            }
+        }
+        /// <summary>役職／ふりがな／☆／名前1文字など、独立して描画される役職欄用。</summary>
+        public bool UsesRoleFont {
+            get {
+                // Legacy の役職は Umios(QR) のみ画面表示。よつ葉・だるまは role 非表示なので UI 側で抑止。
+                return Layout=="QR" || Layout=="RoleName" || Layout=="DeptRoleName" || Layout=="DeptFurigana"
+                    || Layout=="StarRoman" || Layout=="InitialName" || Layout=="InitialMixed";
+            }
+        }
+        public bool UsesPersonFont { get { return NeedsName; } }
+        /// <summary>番号が独立した文字ランとして描画される形式（氏名行へ結合する Prefix/Cohort は除く）。</summary>
+        public bool UsesNumberFont {
+            get {
+                return Layout=="Legacy" || Layout=="QR" || Layout=="NumberName" || Layout=="SplitNumber" || Layout=="NumberOnly"
+                    || Layout=="SizeNumber" || Layout=="DeptNumberName" || Layout=="CompanyCodeName";
+            }
+        }
     }
     public static partial class LabelCatalog
     {
@@ -125,13 +154,66 @@ namespace UnifiedLabels
             if((s.Layout=="InitialName" || s.Layout=="InitialMixed") && d.Role.Replace('　',' ').Trim().Length>1) return "追加する名前は1文字で入力してください。";
             if(s.Layout=="NameParts" && d.Person.Replace('　',' ').Trim().IndexOf(' ')<0) return "苗字と名前の間に半角スペースを入れてください。";
             if(s.StrictFont) {
+                float fixedPt=PickFont(s.MaximumFont,d.PersonFontSet,d.PersonFontPt);
                 using(Bitmap b=new Bitmap(1,1)) using(Graphics g=Graphics.FromImage(b)) {
                     string text=NameForPrint(s,d.Person); Size mm=Millimetres(kind);
                     RectangleF area=s.Layout=="DeptName"?Mm(1,9,48,14):Mm(1,1,mm.Width-2,mm.Height-2);
-                    if(Fit(g,text,s.Family,area,s.MaximumFont)<s.MaximumFont) return "固定"+s.MaximumFont+"ptでは名前が枠に収まりません。表記を確認して短くしてください。";
+                    if(Fit(g,text,s.Family,area,fixedPt)<fixedPt) return "固定"+fixedPt+"ptでは名前が枠に収まりません。表記を確認して短くしてください。";
                 }
             }
             return null;
+        }
+        /// <summary>ユーザー明示ptを優先。未設定・範囲外・非数は catalog 側の値を維持。</summary>
+        public static float PickFont(float catalog,bool userSet,float userPt) {
+            if(!userSet) return catalog;
+            if(float.IsNaN(userPt) || float.IsInfinity(userPt) || userPt<6f || userPt>120f) return catalog;
+            return userPt;
+        }
+        public static float DefaultHeadingPt(LabelSpec s) {
+            if(s.HeadingFont>0) return s.HeadingFont;
+            if(s.Layout=="HeadingName") return 12;
+            if(s.Layout=="NumberName" || s.Layout=="CompanyCodeName" || s.Layout=="CohortName") return 18;
+            return s.Small?18:26;
+        }
+        public static float DefaultPersonPt(LabelSpec s,LabelData d) {
+            string name=NameForPrint(s,d.Person);
+            if(s.Layout=="InitialMixed") return String.IsNullOrWhiteSpace(d.Role)?104:80;
+            if(s.SurnameSizing) return !String.IsNullOrWhiteSpace(d.Role)?56:name.Length<=2?80:64;
+            if(s.MaximumFont>0) return s.MaximumFont;
+            if(s.Layout=="Surname" && !s.SurnameOnly) return 36;
+            if(s.Layout=="StarRoman") return 50;
+            if(s.Layout=="MixedName") return 42;
+            if(s.Layout=="SplitNumber" || s.Layout=="NumberOnly" || s.Layout=="SizeNumber") {
+                if(s.MaximumFont>0) return s.MaximumFont;
+                return GenericSize(s.Small,s.Layout=="NumberOnly"?d.Number:s.Layout=="SizeNumber"?((d.ColorDepartment.StartsWith("その他")?d.Header:d.ColorDepartment)+" "+d.Number):name);
+            }
+            return GenericSize(s.Small,name);
+        }
+        public static float DefaultRolePt(LabelSpec s) {
+            if(s.Layout=="DeptFurigana") return 28;
+            if(s.Layout=="DeptRoleName") return 24;
+            if(s.Layout=="StarRoman") return 26;
+            if(s.Layout=="InitialMixed") return 54;
+            if(s.Layout=="RoleName") return DefaultHeadingPt(s);
+            if(s.Layout=="QR" || s.Layout=="Legacy") return 22;
+            return DefaultHeadingPt(s);
+        }
+        public static float DefaultNumberPt(LabelSpec s,LabelData d) {
+            if(s.Layout=="SplitNumber") return s.MaximumFont>0?s.MaximumFont:36;
+            if(s.Layout=="NumberOnly" || s.Layout=="SizeNumber") return DefaultPersonPt(s,d);
+            if(s.Layout=="NumberName" || s.Layout=="CompanyCodeName" || s.Layout=="HeadingName") return DefaultHeadingPt(s);
+            if(s.Layout=="DeptNumberName") return DefaultHeadingPt(s);
+            if(s.Layout=="Legacy" || s.Layout=="QR") return s.Small?8:10;
+            return DefaultHeadingPt(s);
+        }
+        public static float DefaultHeaderPt(LabelSpec s,LabelData d) {
+            if(s.Layout=="DeptOnly") {
+                string dept=(d.Header??"").Replace('　',' ');
+                return s.MaximumFont>0?s.MaximumFont:GenericSize(s.Small,dept);
+            }
+            if(s.Layout=="StarRoman") return 26;
+            if(s.Layout=="Legacy" || s.Layout=="QR") return s.Small?16:26;
+            return DefaultHeadingPt(s);
         }
         public static string NameForPrint(LabelSpec s,string value)
         {
@@ -237,7 +319,11 @@ namespace UnifiedLabels
             if(s.Pending!="") { Line(g,"仕様確認中",P,Mm(1,1,mm.Width-2,mm.Height-2),16); return; }
             if(s.Layout=="Blank") return;
             if(s.Layout=="QR") { LabelRenderer.Draw(g,3,d); return; }
-            if(s.Layout=="MixedName") { MixedLine(g,d,s.Family,Mm(1,1,78,48)); return; }
+            if(s.Layout=="MixedName") {
+                float emph=PickFont(42,d.PersonFontSet,d.PersonFontPt);
+                float normal=PickFont(24,d.PersonFontSet,d.PersonFontSet?d.PersonFontPt*24f/42f:24);
+                MixedLine(g,d,s.Family,Mm(1,1,78,48),normal,emph); return;
+            }
             if(s.Layout=="FixedSingle") { Line(g,s.Heading,s.Family,Mm(1,1,mm.Width-2,mm.Height-2),s.MaximumFont); return; }
             if(s.Layout=="Fixed") {
                 string[] lines=s.Heading.Split('\n');
@@ -247,25 +333,32 @@ namespace UnifiedLabels
             }
             float maximum=s.MaximumFont>0?s.MaximumFont:(s.Layout=="Surname" && !s.SurnameOnly?36:GenericSize(s.Small,name));
             if(s.SurnameSizing)maximum=!String.IsNullOrWhiteSpace(d.Role)?56:name.Length<=2?80:64;
-            float heading=s.HeadingFont>0?s.HeadingFont:(s.Small?18:26);
+            maximum=PickFont(maximum,d.PersonFontSet,d.PersonFontPt);
+            float heading=PickFont(s.HeadingFont>0?s.HeadingFont:(s.Small?18:26),d.HeaderFontSet,d.HeaderFontPt);
+            float rolePt=PickFont(DefaultRolePt(s),d.RoleFontSet,d.RoleFontPt);
+            float numberPt=PickFont(DefaultNumberPt(s,d),d.NumberFontSet,d.NumberFontPt);
             StringAlignment upperAlign=s.IndentUpper?StringAlignment.Near:StringAlignment.Center;
             RectangleF upper, lower; TwoRowBands(s,mm,out upper,out lower);
-            if(s.Layout=="DeptOnly"){Line(g,d.Header.Replace('　',' '),s.Family,Mm(1,1,mm.Width-2,mm.Height-2),maximum);return;}
+            if(s.Layout=="DeptOnly"){
+                string dept=d.Header.Replace('　',' ');
+                float deptMax=s.MaximumFont>0?s.MaximumFont:GenericSize(s.Small,dept);
+                Line(g,dept,s.Family,Mm(1,1,mm.Width-2,mm.Height-2),PickFont(deptMax,d.HeaderFontSet,d.HeaderFontPt));return;
+            }
             if(s.Layout=="DeptRoleName") {
                 Line(g,d.Header,s.Family,Mm(1,3,78,10),heading,false,upperAlign);
-                Line(g,d.Role,s.Family,Nudge(Mm(1,15,78,10),s.MiddleNudge),24,false,s.MiddleNudge>0?StringAlignment.Near:StringAlignment.Center);
+                Line(g,d.Role,s.Family,Nudge(Mm(1,15,78,10),s.MiddleNudge),rolePt,false,s.MiddleNudge>0?StringAlignment.Near:StringAlignment.Center);
                 Line(g,name,s.Family,Mm(1,27,78,22),maximum);return;
             }
             if(s.Layout=="DeptFurigana") {
                 Line(g,d.Header,s.Family,Mm(1,2,78,10),heading,false,upperAlign);
-                Line(g,d.Role,s.Family,Mm(1,14,78,10),28);
+                Line(g,d.Role,s.Family,Mm(1,14,78,10),rolePt);
                 Line(g,name,s.Family,Mm(1,25,78,24),maximum);return;
             }
             if(s.Layout=="StarRoman") {
                 int stars;if(!Int32.TryParse(d.Role,out stars))stars=0;stars=Math.Max(0,Math.Min(99,stars));
-                if(stars>0)Line(g,new string('☆',stars),s.Family,Mm(1,2,78,10),26);
-                Line(g,name,s.Family,Mm(1,stars>0?13:3,78,stars>0?22:30),50);
-                Line(g,d.Header,s.Family,Mm(1,36,78,12),26);return;
+                if(stars>0)Line(g,new string('☆',stars),s.Family,Mm(1,2,78,10),rolePt);
+                Line(g,name,s.Family,Mm(1,stars>0?13:3,78,stars>0?22:30),maximum);
+                Line(g,d.Header,s.Family,Mm(1,36,78,12),PickFont(26,d.HeaderFontSet,d.HeaderFontPt));return;
             }
             if(s.Layout=="OptionalHeading" && !String.IsNullOrWhiteSpace(d.Header)){
                 Line(g,d.Header,s.Family,upper,heading,false,upperAlign,s.UpperLineAlign);
@@ -279,34 +372,37 @@ namespace UnifiedLabels
                     else if(s.Small) { uy=2f; uh=7f; }
                     else { uy=LargeTwoRowUpperYMm; uh=LargeTwoRowUpperHeightMm; }
                     Line(g,d.Header.Replace('　',' '),s.Family,Mm(1,uy,(mm.Width-3)/2f,uh),heading,false,upperAlign,s.UpperLineAlign);
-                    Line(g,d.Number,s.Family,Mm(mm.Width/2f+0.5f,uy,(mm.Width-3)/2f,uh),heading,false,upperAlign,s.UpperLineAlign);
+                    Line(g,d.Number,s.Family,Mm(mm.Width/2f+0.5f,uy,(mm.Width-3)/2f,uh),numberPt,false,upperAlign,s.UpperLineAlign);
                 } else Line(g,d.Header.Replace('　',' '),s.Family,upper,heading,false,upperAlign,s.UpperLineAlign);
                 Line(g,name,s.Family,lower,maximum,s.StrictFont,StringAlignment.Center,s.LowerLineAlign); return;
             }
             if(s.Layout=="RoleName" && !String.IsNullOrWhiteSpace(d.Role)) {
-                Line(g,d.Role,s.Family,upper,heading,false,upperAlign,s.UpperLineAlign);
+                Line(g,d.Role,s.Family,upper,rolePt,false,upperAlign,s.UpperLineAlign);
                 Line(g,name,s.Family,lower,maximum,false,StringAlignment.Center,s.LowerLineAlign); return;
             }
             if(s.Layout=="RepeatName" || s.Layout=="NameParts") {
                 string first=name,second=name;
                 if(s.Layout=="NameParts") { int space=name.IndexOf(' '); first=space<0?name:name.Substring(0,space); second=space<0?"":name.Substring(space+1).Trim(); }
+                float firstPt=s.Layout=="RepeatName"?maximum:PickFont(GenericSize(s.Small,first),d.PersonFontSet,d.PersonFontPt);
+                float secondPt=s.Layout=="RepeatName"?maximum:PickFont(GenericSize(s.Small,second),d.PersonFontSet,d.PersonFontPt);
                 if(s.UpperBandMm>0f && s.LowerBandMm>0f) {
-                    Line(g,first,s.Family,upper,s.Layout=="RepeatName"?maximum:GenericSize(s.Small,first),false,StringAlignment.Center,s.UpperLineAlign);
-                    Line(g,second,s.Family,lower,s.Layout=="RepeatName"?maximum:GenericSize(s.Small,second),false,StringAlignment.Center,s.LowerLineAlign);
+                    Line(g,first,s.Family,upper,firstPt,false,StringAlignment.Center,s.UpperLineAlign);
+                    Line(g,second,s.Family,lower,secondPt,false,StringAlignment.Center,s.LowerLineAlign);
                 } else if(s.Small) {
                     float height=(mm.Height-4)/2f;
-                    Line(g,first,s.Family,Mm(1,2,mm.Width-2,height),s.Layout=="RepeatName"?maximum:GenericSize(s.Small,first));
-                    Line(g,second,s.Family,Mm(1,mm.Height/2f+1,mm.Width-2,height),s.Layout=="RepeatName"?maximum:GenericSize(s.Small,second));
+                    Line(g,first,s.Family,Mm(1,2,mm.Width-2,height),firstPt);
+                    Line(g,second,s.Family,Mm(1,mm.Height/2f+1,mm.Width-2,height),secondPt);
                 } else {
-                    Line(g,first,s.Family,Mm(1,LargeTwoRowUpperYMm,mm.Width-2,LargeTwoRowUpperHeightMm),s.Layout=="RepeatName"?maximum:GenericSize(s.Small,first));
-                    Line(g,second,s.Family,Mm(1,LargeTwoRowLowerYMm,mm.Width-2,LargeTwoRowLowerHeightMm),s.Layout=="RepeatName"?maximum:GenericSize(s.Small,second));
+                    Line(g,first,s.Family,Mm(1,LargeTwoRowUpperYMm,mm.Width-2,LargeTwoRowUpperHeightMm),firstPt);
+                    Line(g,second,s.Family,Mm(1,LargeTwoRowLowerYMm,mm.Width-2,LargeTwoRowLowerHeightMm),secondPt);
                 }
                 return;
             }
             if(s.Layout=="InitialName" && !String.IsNullOrWhiteSpace(d.Role)) name+="("+d.Role.Trim()+")";
             if(s.Layout=="InitialMixed") {
-                if(String.IsNullOrWhiteSpace(d.Role)) Line(g,name,s.Family,Mm(1,1,mm.Width-2,mm.Height-2),104);
-                else MixedLine(g,new LabelData {Person=name+d.Role.Trim(),EmphasisStart=name.Length,EmphasisLength=d.Role.Trim().Length},s.Family,Mm(1,1,mm.Width-2,mm.Height-2),80,54);
+                if(String.IsNullOrWhiteSpace(d.Role)) Line(g,name,s.Family,Mm(1,1,mm.Width-2,mm.Height-2),PickFont(104,d.PersonFontSet,d.PersonFontPt));
+                else MixedLine(g,new LabelData {Person=name+d.Role.Trim(),EmphasisStart=name.Length,EmphasisLength=d.Role.Trim().Length},s.Family,Mm(1,1,mm.Width-2,mm.Height-2),
+                    PickFont(80,d.PersonFontSet,d.PersonFontPt),PickFont(54,d.RoleFontSet,d.RoleFontPt));
                 return;
             }
             if(s.Layout=="NumberOnly") name=d.Number;
@@ -318,11 +414,15 @@ namespace UnifiedLabels
                 string top=s.Layout=="HeadingName"?s.Heading:s.NumberPrefix+d.Number;
                 if(s.Layout=="CompanyCodeName") top=s.Heading+" "+(d.Number.Length==5?d.Number.Substring(0,1)+"-"+d.Number.Substring(1,2)+"-"+d.Number.Substring(3,2):d.Number);
                 float topPt=s.HeadingFont>0?s.HeadingFont:s.Layout=="HeadingName"?12:18;
+                if(s.Layout=="HeadingName") topPt=PickFont(topPt,d.HeaderFontSet,d.HeaderFontPt);
+                if(s.Layout=="NumberName" || s.Layout=="CompanyCodeName") topPt=PickFont(topPt,d.NumberFontSet,d.NumberFontPt);
                 Line(g,top,s.HeaderFamily!=""?s.HeaderFamily:s.Family,upper,topPt,false,upperAlign,s.UpperLineAlign);
                 Line(g,name,s.Family,lower,maximum,s.StrictFont,StringAlignment.Center,s.LowerLineAlign);
             } else if(s.Layout=="SplitNumber") {
-                Line(g,d.Number,s.Family,Mm(1,1,23,22),36);
-                Line(g,d.Number,s.Family,Mm(26,1,23,22),36);
+                Line(g,d.Number,s.Family,Mm(1,1,23,22),numberPt);
+                Line(g,d.Number,s.Family,Mm(26,1,23,22),numberPt);
+            } else if(s.Layout=="NumberOnly" || s.Layout=="SizeNumber") {
+                Line(g,name,s.Family,Mm(1,1,mm.Width-2,mm.Height-2),numberPt);
             } else {
                 Line(g,name,s.Family,Mm(1,1,mm.Width-2,mm.Height-2),maximum,s.StrictFont,s.IndentUpper && s.Layout=="Surname"?StringAlignment.Near:StringAlignment.Center);
             }

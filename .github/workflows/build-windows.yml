@@ -24,6 +24,7 @@ on:
       - 'cursor/dan-size-full-sync-6a71'
       - 'cursor/remove-favorite-star-7b59'
       - 'cursor/excel-font-band-sync-313d'
+      - 'cursor/per-field-font-ui-4d1b'
     paths:
       - '.github/workflows/build-windows.yml'
       - '統合ネームラベル/ソース/**'
