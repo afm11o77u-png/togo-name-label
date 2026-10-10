@@ -31,6 +31,7 @@ on:
       - 'cursor/tokyo-space-note-f670'
       - 'cursor/form-placement-band-10fa'
       - 'cursor/excel-full-resync-28ae'
+      - 'cursor/startup-placement-be94'
     paths:
       - '.github/workflows/build-windows.yml'
       - '統合ネームラベル/ソース/**'
