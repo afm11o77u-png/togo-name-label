@@ -16,6 +16,10 @@ namespace UnifiedLabels
         public bool SurnameOnly, SpaceSurname, StrictFont;
         public bool SurnameSizing, ColorFromDepartment, UnknownSize, IndentUpper;
         public float MiddleNudge;
+        // 段サイズ（仕分けExcel）：帯高さmm。0＝サイズ既定（大25/25・小は従来7/14）。
+        public float UpperBandMm, LowerBandMm;
+        // 帯内の上下揃え（アプリ座標）。既定は中央。
+        public StringAlignment UpperLineAlign=StringAlignment.Center, LowerLineAlign=StringAlignment.Center;
         public string ColorGuide="", InputCaption="", SettingsIdentity="";
         // Legacy, Name, Surname, HeadingName, NumberName, SplitNumber
         public string Layout;
@@ -193,17 +197,16 @@ namespace UnifiedLabels
         // Large 2-row (上下2段) — match ★★ネーム作成管理用.xls「大汎用２段」系:
         // tape width 50mm split into two equal columns (≈25mm each), text rotation -90° (BIFF 180).
         // After mapping columns → app Y bands: upper center 12.5mm, lower center 37.5mm.
+        // Per-format 段サイズは LabelSpec.UpperBandMm / LowerBandMm（仕分けExcel）。
         const float LargeTwoRowUpperYMm=0f, LargeTwoRowUpperHeightMm=25f;
         const float LargeTwoRowLowerYMm=25f, LargeTwoRowLowerHeightMm=25f;
-        // Excel 弁釜列幅は mm ではなく 8.5+13.38=21.88 → 実寸50mm。上段≈19.42 / 下段≈30.58。
-        // Customer 72 only (kinds 129/130/222). 大汎用２段の25+25は未変更。描画は上段下揃え・下段上揃え。
-        const float BenGamaUpperHeightMm=19.42f, BenGamaLowerYMm=19.42f, BenGamaLowerHeightMm=30.58f;
         static void TwoRowBands(LabelSpec s,Size mm,out RectangleF upper,out RectangleF lower) {
-            if(s.Small) { upper=Mm(1,2,mm.Width-2,7); lower=Mm(1,9,mm.Width-2,14); }
-            else if(s.Customer==72) {
-                upper=Mm(1,0,mm.Width-2,BenGamaUpperHeightMm);
-                lower=Mm(1,BenGamaLowerYMm,mm.Width-2,BenGamaLowerHeightMm);
+            if(s.UpperBandMm>0f && s.LowerBandMm>0f) {
+                upper=Mm(1,0,mm.Width-2,s.UpperBandMm);
+                lower=Mm(1,s.UpperBandMm,mm.Width-2,s.LowerBandMm);
+                return;
             }
+            if(s.Small) { upper=Mm(1,2,mm.Width-2,7); lower=Mm(1,9,mm.Width-2,14); }
             else { upper=Mm(1,LargeTwoRowUpperYMm,mm.Width-2,LargeTwoRowUpperHeightMm); lower=Mm(1,LargeTwoRowLowerYMm,mm.Width-2,LargeTwoRowLowerHeightMm); }
         }
         public static void Line(Graphics g,string text,string family,RectangleF area,float maximum)
@@ -238,9 +241,9 @@ namespace UnifiedLabels
             if(s.Layout=="FixedSingle") { Line(g,s.Heading,s.Family,Mm(1,1,mm.Width-2,mm.Height-2),s.MaximumFont); return; }
             if(s.Layout=="Fixed") {
                 string[] lines=s.Heading.Split('\n');
-                // Excel「大フォークリフト」: two equal columns → same 25/25 bands as TwoRowBands.
-                Line(g,lines[0],s.Family,Mm(1,LargeTwoRowUpperYMm,78,LargeTwoRowUpperHeightMm),30);
-                Line(g,lines[1],s.Family,Mm(1,LargeTwoRowLowerYMm,78,LargeTwoRowLowerHeightMm),28); return;
+                RectangleF fu, fl; TwoRowBands(s,mm,out fu,out fl);
+                Line(g,lines[0],s.Family,fu,30,false,StringAlignment.Center,s.UpperLineAlign);
+                Line(g,lines[1],s.Family,fl,28,false,StringAlignment.Center,s.LowerLineAlign); return;
             }
             float maximum=s.MaximumFont>0?s.MaximumFont:(s.Layout=="Surname" && !s.SurnameOnly?36:GenericSize(s.Small,name));
             if(s.SurnameSizing)maximum=!String.IsNullOrWhiteSpace(d.Role)?56:name.Length<=2?80:64;
@@ -264,26 +267,37 @@ namespace UnifiedLabels
                 Line(g,name,s.Family,Mm(1,stars>0?13:3,78,stars>0?22:30),50);
                 Line(g,d.Header,s.Family,Mm(1,36,78,12),26);return;
             }
-            if(s.Layout=="OptionalHeading" && !String.IsNullOrWhiteSpace(d.Header)){Line(g,d.Header,s.Family,upper,heading,false,upperAlign);Line(g,name,s.Family,lower,maximum);return;}
+            if(s.Layout=="OptionalHeading" && !String.IsNullOrWhiteSpace(d.Header)){
+                Line(g,d.Header,s.Family,upper,heading,false,upperAlign,s.UpperLineAlign);
+                Line(g,name,s.Family,lower,maximum,false,StringAlignment.Center,s.LowerLineAlign);return;
+            }
             if(s.Layout=="SplitCode") {Line(g,name,s.Family,Mm(1,1,23,22),maximum);Line(g,name,s.Family,Mm(26,1,23,22),maximum);return;}
             if(s.Layout=="DeptName" || s.Layout=="DeptNumberName") {
                 if(s.Layout=="DeptNumberName") {
-                    float uy=s.Small?2:LargeTwoRowUpperYMm, uh=s.Small?7:LargeTwoRowUpperHeightMm;
-                    Line(g,d.Header.Replace('　',' '),s.Family,Mm(1,uy,(mm.Width-3)/2f,uh),heading,false,upperAlign);
-                    Line(g,d.Number,s.Family,Mm(mm.Width/2f+0.5f,uy,(mm.Width-3)/2f,uh),heading,false,upperAlign);
-                } else Line(g,d.Header.Replace('　',' '),s.Family,upper,heading,false,upperAlign);
-                Line(g,name,s.Family,lower,maximum,s.StrictFont); return;
+                    float uy, uh;
+                    if(s.UpperBandMm>0f) { uy=0f; uh=s.UpperBandMm; }
+                    else if(s.Small) { uy=2f; uh=7f; }
+                    else { uy=LargeTwoRowUpperYMm; uh=LargeTwoRowUpperHeightMm; }
+                    Line(g,d.Header.Replace('　',' '),s.Family,Mm(1,uy,(mm.Width-3)/2f,uh),heading,false,upperAlign,s.UpperLineAlign);
+                    Line(g,d.Number,s.Family,Mm(mm.Width/2f+0.5f,uy,(mm.Width-3)/2f,uh),heading,false,upperAlign,s.UpperLineAlign);
+                } else Line(g,d.Header.Replace('　',' '),s.Family,upper,heading,false,upperAlign,s.UpperLineAlign);
+                Line(g,name,s.Family,lower,maximum,s.StrictFont,StringAlignment.Center,s.LowerLineAlign); return;
             }
-            if(s.Layout=="RoleName" && !String.IsNullOrWhiteSpace(d.Role)) { Line(g,d.Role,s.Family,upper,heading,false,upperAlign); Line(g,name,s.Family,lower,maximum); return; }
+            if(s.Layout=="RoleName" && !String.IsNullOrWhiteSpace(d.Role)) {
+                Line(g,d.Role,s.Family,upper,heading,false,upperAlign,s.UpperLineAlign);
+                Line(g,name,s.Family,lower,maximum,false,StringAlignment.Center,s.LowerLineAlign); return;
+            }
             if(s.Layout=="RepeatName" || s.Layout=="NameParts") {
                 string first=name,second=name;
                 if(s.Layout=="NameParts") { int space=name.IndexOf(' '); first=space<0?name:name.Substring(0,space); second=space<0?"":name.Substring(space+1).Trim(); }
-                if(s.Small) {
+                if(s.UpperBandMm>0f && s.LowerBandMm>0f) {
+                    Line(g,first,s.Family,upper,s.Layout=="RepeatName"?maximum:GenericSize(s.Small,first),false,StringAlignment.Center,s.UpperLineAlign);
+                    Line(g,second,s.Family,lower,s.Layout=="RepeatName"?maximum:GenericSize(s.Small,second),false,StringAlignment.Center,s.LowerLineAlign);
+                } else if(s.Small) {
                     float height=(mm.Height-4)/2f;
                     Line(g,first,s.Family,Mm(1,2,mm.Width-2,height),s.Layout=="RepeatName"?maximum:GenericSize(s.Small,first));
                     Line(g,second,s.Family,Mm(1,mm.Height/2f+1,mm.Width-2,height),s.Layout=="RepeatName"?maximum:GenericSize(s.Small,second));
                 } else {
-                    // Excel equal 25mm columns (e.g. 大コトメンフーズ実習生帽子).
                     Line(g,first,s.Family,Mm(1,LargeTwoRowUpperYMm,mm.Width-2,LargeTwoRowUpperHeightMm),s.Layout=="RepeatName"?maximum:GenericSize(s.Small,first));
                     Line(g,second,s.Family,Mm(1,LargeTwoRowLowerYMm,mm.Width-2,LargeTwoRowLowerHeightMm),s.Layout=="RepeatName"?maximum:GenericSize(s.Small,second));
                 }
@@ -303,14 +317,9 @@ namespace UnifiedLabels
             if(s.Layout=="HeadingName" || s.Layout=="NumberName" || s.Layout=="CohortName" || s.Layout=="CompanyCodeName") {
                 string top=s.Layout=="HeadingName"?s.Heading:s.NumberPrefix+d.Number;
                 if(s.Layout=="CompanyCodeName") top=s.Heading+" "+(d.Number.Length==5?d.Number.Substring(0,1)+"-"+d.Number.Substring(1,2)+"-"+d.Number.Substring(3,2):d.Number);
-                if(s.Customer==72) {
-                    // 弁釜 Excel: 上段下揃え・下段上揃え（帯内の縦中央ではない）。
-                    Line(g,top,s.HeaderFamily!=""?s.HeaderFamily:s.Family,upper,s.HeadingFont>0?s.HeadingFont:18,false,upperAlign,StringAlignment.Far);
-                    Line(g,name,s.Family,lower,maximum,s.StrictFont,StringAlignment.Center,StringAlignment.Near);
-                } else {
-                    Line(g,top,s.HeaderFamily!=""?s.HeaderFamily:s.Family,upper,s.HeadingFont>0?s.HeadingFont:s.Layout=="HeadingName"?12:18,false,upperAlign);
-                    Line(g,name,s.Family,lower,maximum,s.StrictFont);
-                }
+                float topPt=s.HeadingFont>0?s.HeadingFont:s.Layout=="HeadingName"?12:18;
+                Line(g,top,s.HeaderFamily!=""?s.HeaderFamily:s.Family,upper,topPt,false,upperAlign,s.UpperLineAlign);
+                Line(g,name,s.Family,lower,maximum,s.StrictFont,StringAlignment.Center,s.LowerLineAlign);
             } else if(s.Layout=="SplitNumber") {
                 Line(g,d.Number,s.Family,Mm(1,1,23,22),36);
                 Line(g,d.Number,s.Family,Mm(26,1,23,22),36);
