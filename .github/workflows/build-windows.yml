@@ -17,6 +17,7 @@ on:
       - 'cursor/dan-size-two-row-a8df'
       - 'cursor/customer-type-filter-6f83'
       - 'cursor/customer-name-input-7b59'
+      - 'cursor/remove-picker-star-7b59'
     paths:
       - '.github/workflows/build-windows.yml'
       - '統合ネームラベル/ソース/**'
