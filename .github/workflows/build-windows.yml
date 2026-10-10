@@ -1,0 +1,55 @@
+name: Build Windows exe
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_artifacts:
+        description: Commit built exe/config back to the triggering branch
+        type: boolean
+        default: true
+  push:
+    branches:
+      - 'cursor/publish-built-exe-*'
+    paths:
+      - '.github/workflows/build-windows.yml'
+      - '統合ネームラベル/ソース/**'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build with ビルド.ps1
+        shell: pwsh
+        run: |
+          Set-Location -LiteralPath '統合ネームラベル/ソース'
+          & '.\ビルド.ps1'
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: togo-name-label-windows
+          path: |
+            統合ネームラベル/統合ネームラベル.exe
+            統合ネームラベル/統合ネームラベル.exe.config
+            統合ネームラベル/DotNetBarcode.dll
+          if-no-files-found: error
+
+      - name: Commit built artifacts to branch
+        if: ${{ github.event_name == 'push' || inputs.commit_artifacts }}
+        shell: pwsh
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- '統合ネームラベル/統合ネームラベル.exe' '統合ネームラベル/統合ネームラベル.exe.config'
+          if (git diff --cached --quiet) {
+            Write-Host 'No artifact changes to commit.'
+            exit 0
+          }
+          git commit -m "Rebuild 統合ネームラベル.exe on windows-latest (includes 汎用ラベル)"
+          git push origin "HEAD:$env:GITHUB_REF_NAME"
