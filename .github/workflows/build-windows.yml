@@ -23,6 +23,7 @@ on:
       - 'cursor/dan-size-small-align-668a'
       - 'cursor/dan-size-full-sync-6a71'
       - 'cursor/remove-favorite-star-7b59'
+      - 'cursor/excel-font-band-sync-313d'
     paths:
       - '.github/workflows/build-windows.yml'
       - '統合ネームラベル/ソース/**'
