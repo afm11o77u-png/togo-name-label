@@ -182,7 +182,7 @@ namespace UnifiedLabels
         readonly TextBox header = new TextBox(), role = new TextBox(), person = new TextBox(), number = new TextBox();
         readonly Label headerLabel = new Label(), roleLabel = new Label(), status = new Label(), guide = new Label();
         readonly Label smallPlacement = new Label(), largePlacement = new Label(), garmentSummary = new Label();
-        readonly Label personLabel = new Label(), numberLabel = new Label();
+        readonly Label personLabel = new Label(), numberLabel = new Label(), personSpaceNote = new Label();
         readonly NumericUpDown headerFont = new NumericUpDown(), roleFont = new NumericUpDown(), personFont = new NumericUpDown(), numberFont = new NumericUpDown();
         readonly Label headerFontUnit = new Label(), roleFontUnit = new Label(), personFontUnit = new Label(), numberFontUnit = new Label();
         readonly Font placementBold = new Font("Yu Gothic UI",10,FontStyle.Bold);
@@ -230,9 +230,13 @@ public MainForm(string settingsFile)
             colorDepartment.DropDownStyle=ComboBoxStyle.DropDownList; colorDepartment.Items.AddRange(LabelCatalog.ColorDepartments); Field(colorDepartment,25,124,FieldWidth); colorDepartment.Visible=false;
             roleLabel.Text="役職"; Field(roleLabel,25,164,320); Field(role,25,192,FieldWidth);
             personLabel.Text="名前"; Field(personLabel,25,232,320); Field(person,25,260,FieldWidth); person.MaxLength=20;
-            numberLabel.Text="社員番号（コードに変換する内容）"; Field(numberLabel,25,300,320); Field(number,25,328,FieldWidth);
+            // 氏名欄の直下。既存の全角→半角変換（Current / LabelRenderer）と同じ趣旨。
+            personSpaceNote.Text="※全角スペースも半角スペースとして出力されます";
+            personSpaceNote.ForeColor=Color.FromArgb(80,80,80);
+            Field(personSpaceNote,25,292,320); personSpaceNote.Height=20;
+            numberLabel.Text="社員番号（コードに変換する内容）"; Field(numberLabel,25,322,320); Field(number,25,350,FieldWidth);
             SetupFontBox(headerFont, headerFontUnit); SetupFontBox(roleFont, roleFontUnit); SetupFontBox(personFont, personFontUnit); SetupFontBox(numberFont, numberFontUnit);
-            digits.DropDownStyle=ComboBoxStyle.DropDownList; digits.Items.AddRange(new object[]{"数字4桁（Y含め5文字）","数字5桁（Y含め6文字）"}); Field(digits,25,365,320); digits.SelectedIndex=0;
+            digits.DropDownStyle=ComboBoxStyle.DropDownList; digits.Items.AddRange(new object[]{"数字4桁（Y含め5文字）","数字5桁（Y含め6文字）"}); Field(digits,25,387,320); digits.SelectedIndex=0;
             Controls.Add(Caption("ラベルの内容（拡大表示）",390,20));
             preview.SetBounds(390,55,580,310); preview.BackColor=Color.White; preview.BorderStyle=BorderStyle.FixedSingle;
             preview.SizeMode=PictureBoxSizeMode.Zoom; Controls.Add(preview);
@@ -262,9 +266,9 @@ public MainForm(string settingsFile)
             for(int n=0;n<4;n++) { colorLegend[n].SetBounds(25+(n%2)*480,505+(n/2)*44,465,40); colorLegend[n].BorderStyle=BorderStyle.FixedSingle; colorLegend[n].Padding=new Padding(5,1,0,0); colorLegend[n].Visible=false; Controls.Add(colorLegend[n]); }
             Controls.Add(Caption("ラベル形式",25,96)); Field(formats,25,124,320);
             person.HideSelection=false;
-            emphasize.Text="選択部分を大きく"; Field(emphasize,25,370,210);
-            clearEmphasis.Text="解除"; Field(clearEmphasis,245,370,100);
-            emphasisGuide.SetBounds(25,405,320,80); Controls.Add(emphasisGuide);
+            emphasize.Text="選択部分を大きく"; Field(emphasize,25,392,210);
+            clearEmphasis.Text="解除"; Field(clearEmphasis,245,392,100);
+            emphasisGuide.SetBounds(25,427,320,80); Controls.Add(emphasisGuide);
             emphasize.Click+=delegate { SetEmphasis(); };
             clearEmphasis.Click+=delegate { emphasisStart=-1; emphasisLength=0; UpdateEmphasisGuide(); UpdatePreview(); };
             person.TextChanged+=delegate { if(!changing) { emphasisStart=-1; emphasisLength=0; UpdateEmphasisGuide(); } };
@@ -502,7 +506,7 @@ public MainForm(string settingsFile)
             }
             if(spec.Layout=="SizeNumber") { role.Visible=false; roleLabel.Visible=true; roleLabel.Text="その他サイズ（例：10L）"; header.Visible=true; header.Top=262; header.ReadOnly=false; header.MaxLength=5; header.Text=d.Header; }
             else header.Top=194;
-            person.Visible=personLabel.Visible=spec.NeedsName;
+            person.Visible=personLabel.Visible=personSpaceNote.Visible=spec.NeedsName;
             personLabel.Text=(spec.SurnameOnly || spec.Layout=="Surname"?"苗字":"名前")+(spec.Reading!=""?"（"+spec.Reading+"で入力）":spec.SurnameOnly || spec.Layout=="Surname"?"（苗字のみ印字）":"（フルネーム）");
             if(spec.InputCaption!="")personLabel.Text=spec.InputCaption;
             number.Visible=numberLabel.Visible=spec.NeedsNumber;
@@ -766,6 +770,20 @@ public MainForm(string settingsFile)
             if(smallPlacement.Bottom>largePlacement.Top || largePlacement.Bottom>guide.Top)throw new Exception("貼り付け先帯レイアウトが崩れている");
             SelectedCustomerIndex=1; Application.DoEvents();
             if(garmentSummary.Visible || garmentSummary.Height!=0)throw new Exception("1形式顧客で商品対応帯が残っている");
+            // よつ葉東京工場: 五十音順2 r214–216 と同一（定型つなぎ＋白＋青）。「二種類」想定より Excel は3形式。
+            int[] tokyo=LabelCatalog.ForCustomer(73);
+            if(tokyo.Length!=3) throw new Exception("よつ葉東京工場の形式数がExcelと違う "+tokyo.Length);
+            if(LabelCatalog.Items[tokyo[0]].Layout!="FixedSingle" || LabelCatalog.Items[tokyo[0]].Placement!="つなぎ：左胸(片布)" || LabelCatalog.Items[tokyo[0]].MaximumFont!=24)
+                throw new Exception("よつ葉東京・つなぎ定型がExcelと違う");
+            if(LabelCatalog.Items[tokyo[1]].Layout!="HeadingName" || LabelCatalog.Items[tokyo[1]].FixedColor!="白" || LabelCatalog.Items[tokyo[1]].UpperBandMm!=12f || LabelCatalog.Items[tokyo[1]].LowerBandMm!=12f)
+                throw new Exception("よつ葉東京・白ラベルがExcelと違う");
+            if(LabelCatalog.Items[tokyo[2]].Layout!="HeadingName" || LabelCatalog.Items[tokyo[2]].FixedColor!="青" || LabelCatalog.Items[tokyo[2]].UpperBandMm!=12f || LabelCatalog.Items[tokyo[2]].LowerBandMm!=12f)
+                throw new Exception("よつ葉東京・青ラベルがExcelと違う");
+            SelectedCustomerIndex=73; formats.SelectedIndex=1; Application.DoEvents();
+            if(!personSpaceNote.Visible || personSpaceNote.Text.IndexOf("全角スペース")<0) throw new Exception("氏名欄下の全角スペース注意書きが出ていない");
+            if(personSpaceNote.Top<person.Bottom || (numberLabel.Visible && personSpaceNote.Bottom>numberLabel.Top)) throw new Exception("全角スペース注意書きの位置が氏名欄直下でない");
+            person.Text="山田　太郎"; Application.DoEvents();
+            if(Current().Person!="山田 太郎") throw new Exception("全角スペース注意書きと変換ロジックが矛盾");
             SelectedCustomerIndex=0; Application.DoEvents();
             int baseW=ClientSize.Width, baseH=ClientSize.Height, previewW=preview.Width, guideW=guide.Width;
             ClientSize=new Size(baseW+80,baseH+40);
