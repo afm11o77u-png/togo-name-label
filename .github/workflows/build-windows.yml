@@ -34,6 +34,7 @@ on:
       - 'cursor/startup-placement-be94'
       - 'cursor/umios-role-font-pt-903f'
       - 'cursor/summer-select-banner-ac23'
+      - 'cursor/window-shrink-scale-7f77'
     paths:
       - '.github/workflows/build-windows.yml'
       - '統合ネームラベル/ソース/**'
