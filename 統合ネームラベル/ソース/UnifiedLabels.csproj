@@ -15,7 +15,7 @@
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="DotNetBarcode"><HintPath>..\DotNetBarcode.dll</HintPath><Private>True</Private></Reference>
-    <Compile Include="Program.cs" /><Compile Include="UserFeatures.cs" /><Compile Include="CatalogVerification.cs" /><Compile Include="LabelCatalog.cs" /><Compile Include="AdditionalCatalog.cs" />
+    <Compile Include="Program.cs" /><Compile Include="UserFeatures.cs" /><Compile Include="CatalogVerification.cs" /><Compile Include="LabelCatalog.cs" /><Compile Include="AdditionalCatalog.cs" /><Compile Include="GenericLabel.cs" />
     <None Include="App.config" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

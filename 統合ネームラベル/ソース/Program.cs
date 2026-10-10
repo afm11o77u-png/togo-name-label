@@ -159,8 +159,10 @@ public MainForm(string settingsFile)
             FormBorderStyle = FormBorderStyle.FixedSingle; MaximizeBox = false; StartPosition = FormStartPosition.CenterScreen;
             Label customerCaption=Caption("顧客",25,20);customerCaption.Width=95;Controls.Add(customerCaption); Field(customers,25,48,320);
             Button search=new Button {Text="顧客を探す"}; Field(search,140,12,125); favorite.Text="☆";Field(favorite,275,12,70);
+            Button generic=new Button {Text="汎用ラベル"}; Field(generic,790,12,180);
             search.Click+=delegate {using(CustomerPicker dlg=new CustomerPicker(preferences)) if(dlg.ShowDialog(this)==DialogResult.OK) SelectedCustomerIndex=dlg.SelectedCustomer; favorite.Text=preferences.Favorites.Contains(customers.Text)?"★":"☆";};
             favorite.Click+=delegate {Safe(delegate {preferences.Toggle(customers.Text);favorite.Text=preferences.Favorites.Contains(customers.Text)?"★":"☆";});};
+            generic.Click+=delegate {using(GenericLabelForm dlg=new GenericLabelForm(preferences)) dlg.ShowDialog(this); UpdatePreview();};
             customers.DropDownStyle=formats.DropDownStyle=ComboBoxStyle.DropDownList;
             customers.Items.AddRange(LabelCatalog.SortedCustomers());
             customers.AutoCompleteSource=AutoCompleteSource.ListItems; customers.AutoCompleteMode=AutoCompleteMode.SuggestAppend;
@@ -751,7 +753,22 @@ public MainForm(string settingsFile)
         [STAThread] static int Main(string[] args)
         {
             Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
-            try { using(MainForm form=new MainForm(args.Length==2 && args[0].StartsWith("--verify")?Path.Combine(Path.GetFullPath(args[1]),"test-settings.xml"):Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"UnifiedNameLabels","settings.xml"))) { if(args.Length==2 && args[0]=="--verify") form.Verify(args[1]); else if(args.Length==2 && args[0]=="--verify-layout") form.VerifyLayoutUpdates(args[1]); else if(args.Length==2 && args[0]=="--verify-features") form.VerifyFeatures(args[1]); else if(args.Length==2 && args[0]=="--verify-latest") form.VerifyLatest(args[1]); else if(args.Length==2 && args[0]=="--verify-retained") form.VerifyRetainedInputs(args[1]); else Application.Run(form); } return 0; }
+            try {
+                string settings=args.Length==2 && args[0].StartsWith("--verify")?Path.Combine(Path.GetFullPath(args[1]),"test-settings.xml"):Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"UnifiedNameLabels","settings.xml");
+                if(args.Length==2 && args[0]=="--verify-generic") {
+                    using(GenericLabelForm generic=new GenericLabelForm(new UserSettings(settings))) generic.Verify(args[1]);
+                    return 0;
+                }
+                using(MainForm form=new MainForm(settings)) {
+                    if(args.Length==2 && args[0]=="--verify") form.Verify(args[1]);
+                    else if(args.Length==2 && args[0]=="--verify-layout") form.VerifyLayoutUpdates(args[1]);
+                    else if(args.Length==2 && args[0]=="--verify-features") form.VerifyFeatures(args[1]);
+                    else if(args.Length==2 && args[0]=="--verify-latest") form.VerifyLatest(args[1]);
+                    else if(args.Length==2 && args[0]=="--verify-retained") form.VerifyRetainedInputs(args[1]);
+                    else Application.Run(form);
+                }
+                return 0;
+            }
             catch(Exception ex) { if(args.Length>1) { Directory.CreateDirectory(args[1]); File.WriteAllText(Path.Combine(args[1],"error.txt"),ex.ToString()); } else MessageBox.Show(ex.Message,"起動エラー"); return 1; }
         }
     }
