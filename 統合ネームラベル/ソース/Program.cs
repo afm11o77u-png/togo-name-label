@@ -523,24 +523,35 @@ public MainForm(string settingsFile)
         {
             LabelSpec spec=LabelCatalog.Items[active];
             UpdateColorLegend();
-            smallPlacement.Visible=largePlacement.Visible=active<2;
-            smallPlacement.Text=active==0?"▶ 小ネーム → 黒下【選択中】":"　小ネーム → 黒下";
-            largePlacement.Text=active==1?"▶ 大ネーム → 白衣【選択中】":"　大ネーム → 白衣";
-            smallPlacement.Font=active==0?placementBold:Font; largePlacement.Font=active==1?placementBold:Font;
-            smallPlacement.BackColor=active==0?Color.FromArgb(218,237,255):BackColor;
-            largePlacement.BackColor=active==1?Color.FromArgb(218,237,255):BackColor;
+            Color bandBlue=Color.FromArgb(218,237,255);
             int count=digits.SelectedIndex==1?5:4;
             number.MaxLength=active<2?count+1:active<4?LabelRenderer.NumberLimits[active]:spec.Layout=="QR"?6:spec.NumberLength>0?spec.NumberLength:10;
             if(active<2 && number.Text.Length>number.MaxLength) number.Text=number.Text.Substring(0,number.MaxLength);
             guide.Text="使用するラベル：白　｜　サイズ："+(active==0?"小（幅50mm・カット長24mm）":"大（幅50mm・カット長80mm）")+(active<2?"\r\nよつ葉のQRコード：Y＋数字"+count+"桁（例："+(count==5?"Y12345":"Y1234")+"／合計"+(count+1)+"文字）":"");
-            if(active>=4) {
-                smallPlacement.Visible=largePlacement.Visible=true;
-                smallPlacement.Text="貼り付け先："+spec.Placement; smallPlacement.Font=placementBold; smallPlacement.BackColor=Color.FromArgb(218,237,255);
-                largePlacement.Text=spec.Pending!=""?"要確認："+spec.Pending:spec.Note+(spec.ColorGuide!=""?(spec.Note!=""?" ／ ":"")+"色の指定："+spec.ColorGuide:""); largePlacement.Visible=largePlacement.Text!="" && !(spec.Customer==10 || spec.Customer==14); largePlacement.Font=Font; largePlacement.BackColor=BackColor;
-                string color=LabelCatalog.ColorName(active,Current());
-                guide.Text=(color!=""?"使用するラベル："+color+"　｜　":"")+"サイズ："+(spec.UnknownSize?"未指定":spec.Small?"小（幅50mm・カット長24mm）":"大（幅50mm・カット長80mm）")+"\r\n"+(spec.Family=="MS PGothic"?"Pゴシック":spec.Family=="MS PMincho"?(spec.HeaderFamily!=""?"上段："+spec.HeaderFamily+"／下段P明朝":"P明朝"):"HG丸ゴシック")+(spec.StrictFont?"／氏名は20pt固定（収まらない場合は印刷できません）":"／文字の大きさは印字範囲に合わせて自動調整")+"／各欄右のptで変更可";
+            // 青帯: 形式を選んだら常に詳細な貼り付け先を出す（よつ葉の【選択中】行とは別枠）
+            smallPlacement.Visible=true;
+            smallPlacement.Text="貼り付け先："+spec.Placement;
+            smallPlacement.Font=placementBold;
+            smallPlacement.BackColor=bandBlue;
+            if(active<2) {
+                // 【選択中】行は貼り付け先帯の下に残す（2行分を1ラベルにまとめる）
+                largePlacement.Visible=true;
+                largePlacement.Text=(active==0?"▶ 小ネーム → 黒下【選択中】":"　小ネーム → 黒下")
+                    +"\r\n"+(active==1?"▶ 大ネーム → 白衣【選択中】":"　大ネーム → 白衣");
+                largePlacement.Font=Font;
+                largePlacement.BackColor=BackColor;
+            } else {
+                largePlacement.Text=spec.Pending!=""?"要確認："+spec.Pending:spec.Note+(spec.ColorGuide!=""?(spec.Note!=""?" ／ ":"")+"色の指定："+spec.ColorGuide:"");
+                largePlacement.Visible=largePlacement.Text!="" && !(spec.Customer==10 || spec.Customer==14);
+                largePlacement.Font=Font;
+                largePlacement.BackColor=BackColor;
+                if(active>=4) {
+                    string color=LabelCatalog.ColorName(active,Current());
+                    guide.Text=(color!=""?"使用するラベル："+color+"　｜　":"")+"サイズ："+(spec.UnknownSize?"未指定":spec.Small?"小（幅50mm・カット長24mm）":"大（幅50mm・カット長80mm）")+"\r\n"+(spec.Family=="MS PGothic"?"Pゴシック":spec.Family=="MS PMincho"?(spec.HeaderFamily!=""?"上段："+spec.HeaderFamily+"／下段P明朝":"P明朝"):"HG丸ゴシック")+(spec.StrictFont?"／氏名は20pt固定（収まらない場合は印刷できません）":"／文字の大きさは印字範囲に合わせて自動調整")+"／各欄右のptで変更可";
+                }
             }
             UpdateGarmentSummary();
+            EnsurePlacementBandStack();
             ResizePlacementGuides();
         }
         /// <summary>複数形式の顧客だけ、貼り付け先帯の上に商品→大/小対応の色違い帯を出す。</summary>
@@ -564,12 +575,29 @@ public MainForm(string settingsFile)
             }
             garmentSummary.Height=needed;
         }
+        /// <summary>緑帯と青帯が同Y・高さ0で消えたように見えないよう、積み順を矯正する。</summary>
+        void EnsurePlacementBandStack() {
+            int minSmall=garmentSummary.Top+garmentSummary.Height;
+            if(smallPlacement.Top<minSmall) {
+                int delta=minSmall-smallPlacement.Top;
+                foreach(Control control in footerControls)
+                    if(control!=garmentSummary && control.Top>=smallPlacement.Top) control.Top+=delta;
+                ClientSize=new Size(ClientSize.Width,ClientSize.Height+delta);
+            }
+            if(largePlacement.Visible && largePlacement.Top<smallPlacement.Bottom) {
+                int delta=smallPlacement.Bottom-largePlacement.Top;
+                foreach(Control control in footerControls)
+                    if(control!=smallPlacement && control!=garmentSummary && control.Top>=largePlacement.Top) control.Top+=delta;
+                ClientSize=new Size(ClientSize.Width,ClientSize.Height+delta);
+            }
+        }
         void ResizePlacementGuides() {
             foreach(Label label in new Label[]{smallPlacement,largePlacement}) {
-                int measured=TextRenderer.MeasureText(label.Text,label.Font,new Size(label.Width-10,1000),TextFormatFlags.WordBreak).Height;
-                int unwrapped=Math.Max(TextRenderer.MeasureText(label.Text,label.Font).Width,label.Text.Length*label.Font.Height);
-                int conservative=(int)Math.Ceiling(unwrapped/(double)(label.Width-10))*label.Font.Height;
-                int needed=label.Visible?Math.Max(23,Math.Max(measured,conservative)+4):23;
+                int measured=label.Visible?TextRenderer.MeasureText(label.Text,label.Font,new Size(Math.Max(40,label.Width-10),1000),TextFormatFlags.WordBreak).Height:0;
+                int unwrapped=label.Visible?Math.Max(TextRenderer.MeasureText(label.Text,label.Font).Width,label.Text.Length*label.Font.Height):0;
+                int conservative=label.Visible?(int)Math.Ceiling(unwrapped/(double)Math.Max(40,label.Width-10))*label.Font.Height:0;
+                // 非表示帯は高さ0にして隙間・重なりの誤表示を防ぐ
+                int needed=label.Visible?Math.Max(23,Math.Max(measured,conservative)+4):0;
                 int delta=needed-label.Height;
                 if(delta==0) continue;
                 foreach(Control control in footerControls) if(control.Top>label.Top) control.Top+=delta;
@@ -766,10 +794,20 @@ public MainForm(string settingsFile)
             if(LabelCatalog.GarmentSummary(1)!="")throw new Exception("1形式顧客に商品対応帯テキストが出る");
             SelectedCustomerIndex=76; Application.DoEvents();
             if(!garmentSummary.Visible || garmentSummary.Text!="白衣：大ネーム　白下：小ネーム")throw new Exception("十勝大福で商品対応帯が表示されない");
+            if(!smallPlacement.Visible || smallPlacement.Text.IndexOf("貼り付け先：")!=0 || smallPlacement.Height<=0)throw new Exception("十勝大福で貼り付け先帯が出ない");
             if(garmentSummary.Bottom>smallPlacement.Top)throw new Exception("商品対応帯が貼り付け先帯と重なっている");
             if(smallPlacement.Bottom>largePlacement.Top || largePlacement.Bottom>guide.Top)throw new Exception("貼り付け先帯レイアウトが崩れている");
             SelectedCustomerIndex=1; Application.DoEvents();
             if(garmentSummary.Visible || garmentSummary.Height!=0)throw new Exception("1形式顧客で商品対応帯が残っている");
+            if(!smallPlacement.Visible || smallPlacement.Text.IndexOf("貼り付け先：")!=0)throw new Exception("1形式顧客で貼り付け先帯が出ない");
+            // よつ葉: 緑帯＋青帯（貼り付け先）＋【選択中】行が共存すること
+            SelectedCustomerIndex=0; formats.SelectedIndex=0; Application.DoEvents();
+            if(!garmentSummary.Visible || garmentSummary.Height<=0)throw new Exception("よつ葉で商品対応帯が出ない");
+            if(!smallPlacement.Visible || smallPlacement.Text!="貼り付け先：黒下：左前" || smallPlacement.Height<=0)throw new Exception("よつ葉小ネームで貼り付け先帯が出ない");
+            if(!largePlacement.Visible || largePlacement.Text.IndexOf("【選択中】")<0)throw new Exception("よつ葉の【選択中】行が消えている");
+            if(garmentSummary.Bottom>smallPlacement.Top || smallPlacement.Bottom>largePlacement.Top || largePlacement.Bottom>guide.Top)throw new Exception("よつ葉の帯レイアウトが重なっている");
+            formats.SelectedIndex=1; Application.DoEvents();
+            if(smallPlacement.Text!="貼り付け先：白衣：左胸" || largePlacement.Text.IndexOf("大ネーム → 白衣【選択中】")<0)throw new Exception("よつ葉大ネームで貼り付け先／選択中が更新されない");
             // よつ葉東京工場: 五十音順2 r214–216 と同一（定型つなぎ＋白＋青）。「二種類」想定より Excel は3形式。
             int[] tokyo=LabelCatalog.ForCustomer(73);
             if(tokyo.Length!=3) throw new Exception("よつ葉東京工場の形式数がExcelと違う "+tokyo.Length);
