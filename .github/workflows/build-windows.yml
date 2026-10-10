@@ -51,9 +51,5 @@ jobs:
             Write-Host 'No artifact changes to commit.'
             exit 0
           }
-          git commit -m @'
-Rebuild 統合ネームラベル.exe on windows-latest (includes 汎用ラベル)
-
-Built with 統合ネームラベル/ソース/ビルド.ps1 on GitHub Actions windows-latest.
-'@
+          git commit -m "Rebuild 統合ネームラベル.exe on windows-latest (includes 汎用ラベル)"
           git push origin "HEAD:$env:GITHUB_REF_NAME"
