@@ -39,6 +39,7 @@ on:
       - 'cursor/enter-select-apply-eda6'
       - 'cursor/compact-fixed-layout-3da3'
       - 'cursor/asukai-spacing-selection-baae'
+      - 'cursor/umios-layout-enlarge-938e'
     paths:
       - '.github/workflows/build-windows.yml'
       - '統合ネームラベル/ソース/**'

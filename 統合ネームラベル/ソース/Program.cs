@@ -203,12 +203,16 @@ namespace UnifiedLabels
         readonly Font placementBold = new Font("Yu Gothic UI",10,FontStyle.Bold);
         int garmentSummarySlot;
         readonly NumericUpDown copies = new NumericUpDown();
-        // 既定の小型レイアウト（目標スクショ ~812×784 相当）。リサイズ／均一スケールは使わない。
-        const int FormClientWidth = 800, FormClientHeight = 572;
-        const int FieldWidth = 200, FontBoxLeft = 218, FontBoxWidth = 48, FontUnitLeft = 268;
-        const int LeftX = 12, PreviewX = 310, PreviewWidth = 470;
-        // 入力行の行間を広げた分、プリンター以降を少し下げて固定サイズ内に収める。
-        const int LegendTop = 348, BandTop = 394, GuideTop = 442, ButtonTop = 490, StatusTop = 530;
+        // 固定レイアウト（リサイズ／均一スケールなし）。高さ優先で余白を確保し、右上ボタンとプレビューの重なりを避ける。
+        const int FormClientWidth = 960, FormClientHeight = 720;
+        const int FieldWidth = 220, FontBoxLeft = 238, FontBoxWidth = 48, FontUnitLeft = 288;
+        const int LeftX = 16, PreviewX = 340, PreviewWidth = 450;
+        const int GenericLeft = 800, GenericWidth = 144;
+        const int PreviewTop = 36, PreviewHeight = 240;
+        const int SampleCaptionTop = 286, SampleTop = 304, SampleHeight = 80;
+        const int SampleNoteLeft = 510, SampleColorTop = 388;
+        // プリンター行の下端＋余白のあとに帯を置く（部数スピナーの下端クリップ防止）。
+        const int LegendTop = 420, BandTop = 480, GuideTop = 532, ButtonTop = 584, StatusTop = 640;
 
         readonly PictureBox preview = new PictureBox();
         readonly PictureBox sample = new PictureBox();
@@ -220,16 +224,16 @@ namespace UnifiedLabels
         // ラベルは欄より低くし、会社名などでラベル背景が TextBox を覆って潰れて見えるのを防ぐ。
         // 入力行は PreferredHeight 後も見出しと枠が被らないよう、行間を広めに取る。
         const int FieldHeight = 26, LabelFieldHeight = 18, HeaderLabelTop = 86;
-        const int CaptionToField = 20, AfterFieldGap = 10, AfterNoteGap = 6;
+        const int CaptionToField = 20, AfterFieldGap = 10, AfterPersonToNote = 8, AfterNoteGap = 14;
         const int HeaderFieldTop = HeaderLabelTop + CaptionToField; // 106
         const int RoleLabelTop = HeaderFieldTop + FieldHeight + AfterFieldGap; // 142
         const int RoleFieldTop = RoleLabelTop + CaptionToField; // 162
         const int PersonLabelTop = RoleFieldTop + FieldHeight + AfterFieldGap; // 198
         const int PersonFieldTop = PersonLabelTop + CaptionToField; // 218
-        const int PersonNoteTop = PersonFieldTop + FieldHeight + 4; // 248
-        const int NumberLabelTop = PersonNoteTop + 14 + AfterNoteGap; // 268
-        const int NumberFieldTop = NumberLabelTop + CaptionToField; // 288
-        const int ExtraRowTop = NumberFieldTop + FieldHeight + AfterFieldGap; // 324（桁数／強調）
+        const int PersonNoteTop = PersonFieldTop + FieldHeight + AfterPersonToNote; // 252
+        const int NumberLabelTop = PersonNoteTop + 14 + AfterNoteGap; // 280
+        const int NumberFieldTop = NumberLabelTop + CaptionToField; // 300
+        const int ExtraRowTop = NumberFieldTop + FieldHeight + AfterFieldGap; // 336（桁数／強調）
         void Field(Control c, int x, int y, int width) {
             int h = (c is Label) ? LabelFieldHeight : FieldHeight;
             c.SetBounds(x,y,width,h); Controls.Add(c);
@@ -248,8 +252,8 @@ public MainForm(string settingsFile)
             Text = "統合ネームラベル"; Font = new Font("Yu Gothic UI", 9);
             AutoScaleMode = AutoScaleMode.Dpi; ClientSize = new Size(FormClientWidth, FormClientHeight);
             FormBorderStyle = FormBorderStyle.FixedSingle; MaximizeBox = false; StartPosition = FormStartPosition.CenterScreen;
-            Label customerCaption=Caption("顧客",LeftX,6);customerCaption.Width=80;Controls.Add(customerCaption); Field(customers,LeftX,22,280);
-            Button generic=new Button {Text="汎用ラベル"}; Field(generic,630,6,150);
+            Label customerCaption=Caption("顧客",LeftX,6);customerCaption.Width=80;Controls.Add(customerCaption); Field(customers,LeftX,22,300);
+            Button generic=new Button {Text="汎用ラベル"}; Field(generic,GenericLeft,6,GenericWidth);
             generic.Click+=delegate {using(GenericLabelForm dlg=new GenericLabelForm(preferences)) dlg.ShowDialog(this); UpdatePreview();};
             // メイン顧客欄：DropDown で直接入力し、Matches（名前・読み）で候補を絞る（別ダイアログ不要）
             formats.DropDownStyle=ComboBoxStyle.DropDownList;
@@ -261,37 +265,39 @@ public MainForm(string settingsFile)
             kinds.Items.AddRange(LabelRenderer.Titles);
             for(int i=4;i<LabelCatalog.Items.Length;i++) kinds.Items.Add(LabelCatalog.Items[i].Format);
             formats.DropDownWidth=480;
-            Controls.Add(Caption("ラベル形式",LeftX,48)); Field(formats,LeftX,64,280);
-            headerLabel.Text="会社名 / 部署"; Field(headerLabel,LeftX,HeaderLabelTop,280); Field(header,LeftX,HeaderFieldTop,FieldWidth);
+            Controls.Add(Caption("ラベル形式",LeftX,48)); Field(formats,LeftX,64,300);
+            headerLabel.Text="会社名 / 部署"; Field(headerLabel,LeftX,HeaderLabelTop,300); Field(header,LeftX,HeaderFieldTop,FieldWidth);
             department.DropDownStyle=ComboBoxStyle.DropDownList; department.Items.AddRange(new object[] {"製造課 冷食", "製造課 ハムソー", "工務課", "商品開発課", "生産管理課", "総務課", "調達課", "品質保証部"}); Field(department,LeftX,HeaderFieldTop,FieldWidth); department.Visible=false;
             colorDepartment.DropDownStyle=ComboBoxStyle.DropDownList; colorDepartment.Items.AddRange(LabelCatalog.ColorDepartments); Field(colorDepartment,LeftX,HeaderFieldTop,FieldWidth); colorDepartment.Visible=false;
-            roleLabel.Text="役職"; Field(roleLabel,LeftX,RoleLabelTop,280); Field(role,LeftX,RoleFieldTop,FieldWidth);
-            personLabel.Text="名前"; Field(personLabel,LeftX,PersonLabelTop,280); Field(person,LeftX,PersonFieldTop,FieldWidth); person.MaxLength=20;
+            roleLabel.Text="役職"; Field(roleLabel,LeftX,RoleLabelTop,300); Field(role,LeftX,RoleFieldTop,FieldWidth);
+            personLabel.Text="名前"; Field(personLabel,LeftX,PersonLabelTop,300); Field(person,LeftX,PersonFieldTop,FieldWidth); person.MaxLength=20;
             // 氏名欄の直下。既存の全角→半角変換（Current / LabelRenderer）と同じ趣旨。
             personSpaceNote.Text="※全角スペースも半角スペースとして出力されます";
             personSpaceNote.ForeColor=Color.FromArgb(80,80,80);
-            Field(personSpaceNote,LeftX,PersonNoteTop,280); personSpaceNote.Height=14;
-            numberLabel.Text="社員番号（コードに変換する内容）"; Field(numberLabel,LeftX,NumberLabelTop,280); Field(number,LeftX,NumberFieldTop,FieldWidth);
+            Field(personSpaceNote,LeftX,PersonNoteTop,300); personSpaceNote.Height=14;
+            numberLabel.Text="社員番号（コードに変換する内容）"; Field(numberLabel,LeftX,NumberLabelTop,300); Field(number,LeftX,NumberFieldTop,FieldWidth);
             SetupFontBox(headerFont, headerFontUnit); SetupFontBox(roleFont, roleFontUnit); SetupFontBox(personFont, personFontUnit); SetupFontBox(numberFont, numberFontUnit);
             headerFont.Top=HeaderFieldTop; headerFontUnit.Top=HeaderFieldTop;
             roleFont.Top=RoleFieldTop; roleFontUnit.Top=RoleFieldTop;
             personFont.Top=PersonFieldTop; personFontUnit.Top=PersonFieldTop;
             numberFont.Top=NumberFieldTop; numberFontUnit.Top=NumberFieldTop;
-            digits.DropDownStyle=ComboBoxStyle.DropDownList; digits.Items.AddRange(new object[]{"数字4桁（Y含め5文字）","数字5桁（Y含め6文字）"}); Field(digits,LeftX,ExtraRowTop,280); digits.SelectedIndex=0;
+            digits.DropDownStyle=ComboBoxStyle.DropDownList; digits.Items.AddRange(new object[]{"数字4桁（Y含め5文字）","数字5桁（Y含め6文字）"}); Field(digits,LeftX,ExtraRowTop,300); digits.SelectedIndex=0;
             Controls.Add(Caption("ラベルの内容（拡大表示）",PreviewX,6));
-            preview.SetBounds(PreviewX,22,PreviewWidth,185); preview.BackColor=Color.White; preview.BorderStyle=BorderStyle.FixedSingle;
+            preview.SetBounds(PreviewX,PreviewTop,PreviewWidth,PreviewHeight); preview.BackColor=Color.White; preview.BorderStyle=BorderStyle.FixedSingle;
             preview.SizeMode=PictureBoxSizeMode.Zoom; Controls.Add(preview);
-            Controls.Add(Caption("完成見本（サンプル）",PreviewX,212));
-            sample.SetBounds(PreviewX,228,150,72); sample.BackColor=Color.White; sample.BorderStyle=BorderStyle.FixedSingle;
+            Controls.Add(Caption("完成見本（サンプル）",PreviewX,SampleCaptionTop));
+            sample.SetBounds(PreviewX,SampleTop,160,SampleHeight); sample.BackColor=Color.White; sample.BorderStyle=BorderStyle.FixedSingle;
             sample.SizeMode=PictureBoxSizeMode.Zoom; Controls.Add(sample);
-            Label sampleNote=new Label {Text="見本の名前・番号は印刷されません。\r\n表示・印刷時、全角スペースはすべて半角に変換します。\r\n各入力欄右のptでサイズを変更できます。\r\n未変更時はカタログ／自動調整の既定のままです。",Left=470,Top=228,Width=310,Height=72};
+            Label sampleNote=new Label {Text="見本の名前・番号は印刷されません。\r\n表示・印刷時、全角スペースはすべて半角に変換します。\r\n各入力欄右のptでサイズを変更できます。\r\n未変更時はカタログ／自動調整の既定のままです。",Left=SampleNoteLeft,Top=SampleTop,Width=FormClientWidth-SampleNoteLeft-16,Height=SampleHeight};
             Controls.Add(sampleNote);
-            sampleColor.SetBounds(470,302,310,20); sampleColor.TextAlign=ContentAlignment.MiddleLeft; Controls.Add(sampleColor);
+            sampleColor.SetBounds(SampleNoteLeft,SampleColorTop,FormClientWidth-SampleNoteLeft-16,20); sampleColor.TextAlign=ContentAlignment.MiddleLeft; Controls.Add(sampleColor);
             // 期生色帯は見本の下・プリンター欄の上。表示時だけ footer を押し下げて重なりを防ぐ。
-            for(int n=0;n<4;n++) { colorLegend[n].SetBounds(LeftX+(n%2)*390,LegendTop+(n/2)*36,380,34); colorLegend[n].BorderStyle=BorderStyle.FixedSingle; colorLegend[n].Padding=new Padding(4,1,0,0); colorLegend[n].Visible=false; Controls.Add(colorLegend[n]); }
-            Controls.Add(Caption("プリンター",LeftX,LegendTop)); Field(printers,LeftX,LegendTop+16,340);
-            Controls.Add(Caption("用紙サイズ",360,LegendTop)); Field(papers,360,LegendTop+16,250);
-            Label copiesCaption=Caption("部数",620,LegendTop); Controls.Add(copiesCaption); Field(copies,620,LegendTop+16,80); copies.Minimum=1; copies.Maximum=30; copies.Value=1;
+            for(int n=0;n<4;n++) { colorLegend[n].SetBounds(LeftX+(n%2)*460,LegendTop+(n/2)*36,450,34); colorLegend[n].BorderStyle=BorderStyle.FixedSingle; colorLegend[n].Padding=new Padding(4,1,0,0); colorLegend[n].Visible=false; Controls.Add(colorLegend[n]); }
+            const int printerFieldTop = LegendTop + CaptionToField;
+            Controls.Add(Caption("プリンター",LeftX,LegendTop)); Field(printers,LeftX,printerFieldTop,400);
+            Controls.Add(Caption("用紙サイズ",430,LegendTop)); Field(papers,430,printerFieldTop,280);
+            Label copiesCaption=Caption("部数",730,LegendTop); Controls.Add(copiesCaption); Field(copies,730,printerFieldTop,90); copies.Minimum=1; copies.Maximum=30; copies.Value=1;
+            EnsurePreferredHeight(copies);
             // 貼り付け先帯の直上。高さ0で開始し、複数形式時だけ UpdateGarmentSummary で押し広げ。
             garmentSummary.SetBounds(LeftX,BandTop,FormClientWidth-24,0); garmentSummary.Visible=false;
             garmentSummary.Padding=new Padding(6,2,0,0); garmentSummary.BackColor=Color.FromArgb(232,245,220);
@@ -299,9 +305,9 @@ public MainForm(string settingsFile)
             Controls.Add(garmentSummary); Controls.Add(smallPlacement); Controls.Add(largePlacement);
             guide.SetBounds(LeftX,GuideTop,FormClientWidth-24,40); guide.BackColor=Color.White; guide.BorderStyle=BorderStyle.FixedSingle; guide.Padding=new Padding(6,2,0,0); Controls.Add(guide);
             Button page = new Button {Text="用紙・方向設定"}, proof = new Button {Text="印刷プレビュー"}, print = new Button {Text="印刷"};
-            Field(page,LeftX,ButtonTop,150); Field(proof,170,ButtonTop,140); Field(print,630,ButtonTop,150); print.Height=36;
-            Button adjust=new Button {Text="印字位置調整"};Field(adjust,320,ButtonTop,140);offsetSummary.SetBounds(470,ButtonTop,150,36);Controls.Add(offsetSummary);adjust.Click+=delegate {Safe(OpenOffset);};
-            status.SetBounds(LeftX,StatusTop,FormClientWidth-24,32); Controls.Add(status);
+            Field(page,LeftX,ButtonTop,160); Field(proof,190,ButtonTop,150); Field(print,GenericLeft,ButtonTop,GenericWidth); print.Height=36;
+            Button adjust=new Button {Text="印字位置調整"};Field(adjust,360,ButtonTop,150);offsetSummary.SetBounds(530,ButtonTop,240,36);Controls.Add(offsetSummary);adjust.Click+=delegate {Safe(OpenOffset);};
+            status.SetBounds(LeftX,StatusTop,FormClientWidth-24,36); Controls.Add(status);
             // 色帯自体は押し下げ対象外（LegendTop に固定し、プリンター以降だけ動かす）
             foreach(Control control in Controls) {
                 if(control.Top<LegendTop) continue;
@@ -468,12 +474,12 @@ public MainForm(string settingsFile)
                 if(personLabel.Visible) { personLabel.Top = y; y += CaptionToField; }
                 if(person.Visible) {
                     person.Top = y; EnsurePreferredHeight(person);
-                    y = person.Bottom + 4;
+                    y = person.Bottom + AfterPersonToNote;
                 }
                 if(personSpaceNote.Visible) {
                     personSpaceNote.Top = y; personSpaceNote.Height = noteHeight;
                     y = personSpaceNote.Bottom + AfterNoteGap;
-                } else y += AfterFieldGap - 4;
+                } else y += AfterFieldGap - AfterPersonToNote;
             }
 
             if(numberLabel.Visible || number.Visible) {
@@ -788,8 +794,8 @@ public MainForm(string settingsFile)
             try { using(Graphics g=Graphics.FromImage(bitmap)) { g.Clear(LabelCatalog.Swatch(colorName)); g.ScaleTransform(6*0.254f,6*0.254f); LabelRenderer.Draw(g,active,example); } }
             catch { bitmap.Dispose(); throw; }
             sample.BackColor=LabelCatalog.Swatch(colorName);
-            // 小型レイアウトの見本枠を維持（ClientSize 変更で色帯へ食い込ませない）
-            sample.SetBounds(PreviewX,228,LabelCatalog.Items[active].Small?150:140,72);
+            // 見本枠は色帯（LegendTop）より上に固定し、押し下げで食い込ませない
+            sample.SetBounds(PreviewX,SampleTop,LabelCatalog.Items[active].Small?160:150,SampleHeight);
             Image old=sample.Image; sample.Image=bitmap; if(old!=null) old.Dispose();
         }
         void UpdatePreview() {
@@ -912,7 +918,13 @@ public MainForm(string settingsFile)
             if(!UserSettings.Matches("Umios Hokkaido 札幌工場","ＵＭＩＯＳ")||!UserSettings.Matches("よつ葉乳業","よつ葉")||!UserSettings.Matches("よつ葉乳業㈱十勝工場","よつば")||!UserSettings.Matches("よつ葉乳業㈱十勝工場","ヨツバ")||!UserSettings.Matches("Umios Hokkaido 札幌工場","うみおす")||UserSettings.Matches("だるま食品","存在しない"))throw new Exception("検索の検証失敗");
             if(FormBorderStyle!=FormBorderStyle.FixedSingle)throw new Exception("メイン画面が固定サイズでない");
             if(MaximizeBox)throw new Exception("メイン画面の最大化が有効のまま");
-            if(ClientSize.Width>FormClientWidth+40)throw new Exception("既定幅が小型レイアウトより大きい "+ClientSize.Width);
+            if(ClientSize.Width!=FormClientWidth || ClientSize.Height<FormClientHeight)throw new Exception("既定 ClientSize が想定と違う "+ClientSize.Width+"x"+ClientSize.Height);
+            Control genericBtn=null;
+            foreach(Control c in Controls) if(c is Button && c.Text=="汎用ラベル") { genericBtn=c; break; }
+            if(genericBtn==null) throw new Exception("汎用ラベルボタンが見つからない");
+            if(genericBtn.Bounds.IntersectsWith(preview.Bounds)) throw new Exception("汎用ラベルボタンがプレビュー枠と重なっている");
+            if(copies.Height<copies.PreferredHeight) throw new Exception("部数スピナーの高さがPreferredHeight未満 "+copies.Height+"<"+copies.PreferredHeight);
+            if(copies.Bottom>BandTop-4) throw new Exception("部数スピナー下端が帯に近すぎる "+copies.Bottom+" / "+BandTop);
             if(LabelCatalog.GarmentSummary(76)!="白衣：大ネーム　白下：小ネーム")throw new Exception("十勝大福の商品対応帯テキストが想定と違う");
             if(LabelCatalog.GarmentSummary(1)!="")throw new Exception("1形式顧客に商品対応帯テキストが出る");
             // Excel 大きさの QR 区別が緑帯に出ること（よつ葉十勝）
@@ -959,7 +971,8 @@ public MainForm(string settingsFile)
                 throw new Exception("よつ葉東京・青ラベルがExcelと違う");
             SelectedCustomerIndex=73; formats.SelectedIndex=1; Application.DoEvents();
             if(!personSpaceNote.Visible || personSpaceNote.Text.IndexOf("全角スペース")<0) throw new Exception("氏名欄下の全角スペース注意書きが出ていない");
-            if(personSpaceNote.Top<person.Bottom || (numberLabel.Visible && personSpaceNote.Bottom>numberLabel.Top)) throw new Exception("全角スペース注意書きの位置が氏名欄直下でない");
+            if(personSpaceNote.Top<person.Bottom+AfterPersonToNote-1) throw new Exception("注意書きが氏名欄に近すぎる "+person.Bottom+" / "+personSpaceNote.Top);
+            if(numberLabel.Visible && numberLabel.Top<personSpaceNote.Bottom+AfterNoteGap-1) throw new Exception("注意書きと次項目の上下余白が不足 "+personSpaceNote.Bottom+" / "+numberLabel.Top);
             person.Text="山田　太郎"; Application.DoEvents();
             if(Current().Person!="山田 太郎") throw new Exception("全角スペース注意書きと変換ロジックが矛盾");
             SelectedCustomerIndex=0; Application.DoEvents();
