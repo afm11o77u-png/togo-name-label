@@ -28,8 +28,14 @@ namespace UnifiedLabels
     {
         // Use the same style for measurement, baseline metrics and final rendering.
         public static FontStyle StyleFor(string family) {
-            return family != null && family.Normalize(System.Text.NormalizationForm.FormKC).StartsWith("HG丸ゴシック",StringComparison.OrdinalIgnoreCase)
-                ? FontStyle.Bold : FontStyle.Regular;
+            if(family==null) return FontStyle.Regular;
+            string n=family.Normalize(System.Text.NormalizationForm.FormKC);
+            if(n.StartsWith("HG丸ゴシック",StringComparison.OrdinalIgnoreCase)) return FontStyle.Bold;
+            // MSP明朝 / MS PMincho (catalog + common Japanese spellings after FormKC).
+            if(n.IndexOf("PMincho",StringComparison.OrdinalIgnoreCase)>=0
+                || n.IndexOf("P明朝",StringComparison.Ordinal)>=0)
+                return FontStyle.Bold;
+            return FontStyle.Regular;
         }
         public static readonly string[] Customers=CreateCustomers();
         public static string[] DepartmentNames(int kind) {
