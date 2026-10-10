@@ -10,6 +10,7 @@ on:
   push:
     branches:
       - 'cursor/publish-built-exe-*'
+      - 'cursor/ben-gama-excel-realign-9ee6'
     paths:
       - '.github/workflows/build-windows.yml'
       - '統合ネームラベル/ソース/**'
