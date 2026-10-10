@@ -195,8 +195,15 @@ namespace UnifiedLabels
         // After mapping columns → app Y bands: upper center 12.5mm, lower center 37.5mm.
         const float LargeTwoRowUpperYMm=0f, LargeTwoRowUpperHeightMm=25f;
         const float LargeTwoRowLowerYMm=25f, LargeTwoRowLowerHeightMm=25f;
+        // Excel「弁釜 4/5/6文字」「弁釜　実習生」: col1=2336 / col0=3584 of 5920 → ≈19.73+30.27mm (not 25+25).
+        // Customer 72 only (kinds 129/130/222). Keeps 大汎用２段 equal bands unchanged.
+        const float BenGamaUpperHeightMm=19.73f, BenGamaLowerYMm=19.73f, BenGamaLowerHeightMm=30.27f;
         static void TwoRowBands(LabelSpec s,Size mm,out RectangleF upper,out RectangleF lower) {
             if(s.Small) { upper=Mm(1,2,mm.Width-2,7); lower=Mm(1,9,mm.Width-2,14); }
+            else if(s.Customer==72) {
+                upper=Mm(1,0,mm.Width-2,BenGamaUpperHeightMm);
+                lower=Mm(1,BenGamaLowerYMm,mm.Width-2,BenGamaLowerHeightMm);
+            }
             else { upper=Mm(1,LargeTwoRowUpperYMm,mm.Width-2,LargeTwoRowUpperHeightMm); lower=Mm(1,LargeTwoRowLowerYMm,mm.Width-2,LargeTwoRowLowerHeightMm); }
         }
         public static void Line(Graphics g,string text,string family,RectangleF area,float maximum)
