@@ -177,9 +177,8 @@ public MainForm(string settingsFile)
             AutoScaleMode = AutoScaleMode.Dpi; ClientSize = new Size(1000,800);
             FormBorderStyle = FormBorderStyle.FixedSingle; MaximizeBox = false; StartPosition = FormStartPosition.CenterScreen;
             Label customerCaption=Caption("顧客",25,20);customerCaption.Width=95;Controls.Add(customerCaption); Field(customers,25,48,320);
-            Button search=new Button {Text="顧客を探す"}; Field(search,140,12,125); favorite.Text="☆";Field(favorite,275,12,70);
+            favorite.Text="☆";Field(favorite,140,12,70);
             Button generic=new Button {Text="汎用ラベル"}; Field(generic,790,12,180);
-            search.Click+=delegate {using(CustomerPicker dlg=new CustomerPicker(preferences)) if(dlg.ShowDialog(this)==DialogResult.OK) SelectedCustomerIndex=dlg.SelectedCustomer; favorite.Text=preferences.Favorites.Contains(customers.Text)?"★":"☆";};
             favorite.Click+=delegate {Safe(delegate {preferences.Toggle(customers.Text);favorite.Text=preferences.Favorites.Contains(customers.Text)?"★":"☆";});};
             generic.Click+=delegate {using(GenericLabelForm dlg=new GenericLabelForm(preferences)) dlg.ShowDialog(this); UpdatePreview();};
             // メイン顧客欄：DropDown で直接入力し、Matches（名前・読み）で候補を絞る（別ダイアログ不要）
@@ -591,7 +590,6 @@ public MainForm(string settingsFile)
             FillCustomerItems("");if(customers.Items.Count!=LabelCatalog.Customers.Length)throw new Exception("メイン顧客欄の全件復帰失敗");
             Show();person.Text="山田 太郎";number.Text="Y1234";UpdatePreview();Application.DoEvents();
             using(Bitmap b=new Bitmap(Width,Height)){DrawToBitmap(b,new Rectangle(Point.Empty,Size));b.Save(Path.Combine(folder,"main.png"));}
-            using(CustomerPicker dlg=new CustomerPicker(r)){dlg.VerifyFilters();dlg.Show();Application.DoEvents();using(Bitmap b=new Bitmap(dlg.Width,dlg.Height)){dlg.DrawToBitmap(b,new Rectangle(Point.Empty,dlg.Size));b.Save(Path.Combine(folder,"customers.png"));}dlg.Close();}
             foreach(int kind in new[]{0,1,2,3,4}) {
                 kinds.SelectedIndex=kind;person.Text="山田 太郎";number.Text=kind<2?"Y1234":kind==2?"12345678":"123456";
                 using(Bitmap a=CreatePreview(new PrintOffset()))using(Bitmap b=CreatePreview(new PrintOffset(1,1))){bool changed=false;for(int x=0;x<a.Width&&!changed;x+=3)for(int y=0;y<a.Height;y+=3)if(a.GetPixel(x,y)!=b.GetPixel(x,y)){changed=true;break;}if(!changed)throw new Exception("調整未反映");b.Save(Path.Combine(folder,"offset-"+kind+".png"));}
@@ -599,7 +597,7 @@ public MainForm(string settingsFile)
             }
             kinds.SelectedIndex=1;person.Text="山田 太郎";number.Text="Y1234";
             using(OffsetDialog dlg=new OffsetDialog("プリンターごと・ラベル形式ごとに保存\r\nよつ葉乳業 ／ 大ネーム",new PrintOffset(.5m,-.3m),CreatePreview,delegate{throw new Exception("実印刷は禁止");},delegate{})){dlg.Show();Application.DoEvents();using(Bitmap b=new Bitmap(dlg.Width,dlg.Height)){dlg.DrawToBitmap(b,new Rectangle(Point.Empty,dlg.Size));b.Save(Path.Combine(folder,"adjustment.png"));}dlg.Close();}
-            File.WriteAllText(Path.Combine(folder,"features-verification.txt"),"メイン顧客欄の入力絞り込み（読み・全半角）・検索ダイアログ・設定再読込・お気に入り・最近の重複除去・プリンター形式別分離・5形式の調整表示・印刷描画を確認。実印刷なし。",Encoding.UTF8);Hide();
+            File.WriteAllText(Path.Combine(folder,"features-verification.txt"),"メイン顧客欄の入力絞り込み（読み・全半角）・設定再読込・お気に入り・最近の重複除去・プリンター形式別分離・5形式の調整表示・印刷描画を確認。実印刷なし。",Encoding.UTF8);Hide();
         }
         public void Verify(string folder)
         {
