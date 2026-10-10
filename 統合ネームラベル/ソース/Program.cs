@@ -204,7 +204,7 @@ namespace UnifiedLabels
         int garmentSummarySlot;
         readonly NumericUpDown copies = new NumericUpDown();
         // 固定レイアウト（リサイズ／均一スケールなし）。高さ優先で余白を確保し、右上ボタンとプレビューの重なりを避ける。
-        const int FormClientWidth = 960, FormClientHeight = 720;
+        const int FormClientWidth = 960, FormClientHeight = 760;
         const int FieldWidth = 220, FontBoxLeft = 238, FontBoxWidth = 48, FontUnitLeft = 288;
         const int LeftX = 16, PreviewX = 340, PreviewWidth = 450;
         const int GenericLeft = 800, GenericWidth = 144;
@@ -212,7 +212,8 @@ namespace UnifiedLabels
         const int SampleCaptionTop = 286, SampleTop = 304, SampleHeight = 80;
         const int SampleNoteLeft = 510, SampleColorTop = 388;
         // プリンター行の下端＋余白のあとに帯を置く（部数スピナーの下端クリップ防止）。
-        const int LegendTop = 420, BandTop = 480, GuideTop = 532, ButtonTop = 584, StatusTop = 640;
+        // 顧客〜形式〜会社名の余白拡大分だけ帯以降も下げる。
+        const int LegendTop = 456, BandTop = 516, GuideTop = 568, ButtonTop = 620, StatusTop = 676;
 
         readonly PictureBox preview = new PictureBox();
         readonly PictureBox sample = new PictureBox();
@@ -223,17 +224,23 @@ namespace UnifiedLabels
         static Label Caption(string s, int x, int y) { return new Label {Text=s,Left=x,Top=y,Width=280,Height=18}; }
         // ラベルは欄より低くし、会社名などでラベル背景が TextBox を覆って潰れて見えるのを防ぐ。
         // 入力行は PreferredHeight 後も見出しと枠が被らないよう、行間を広めに取る。
-        const int FieldHeight = 26, LabelFieldHeight = 18, HeaderLabelTop = 86;
+        const int FieldHeight = 26, LabelFieldHeight = 18;
         const int CaptionToField = 20, AfterFieldGap = 10, AfterPersonToNote = 8, AfterNoteGap = 14;
-        const int HeaderFieldTop = HeaderLabelTop + CaptionToField; // 106
-        const int RoleLabelTop = HeaderFieldTop + FieldHeight + AfterFieldGap; // 142
-        const int RoleFieldTop = RoleLabelTop + CaptionToField; // 162
-        const int PersonLabelTop = RoleFieldTop + FieldHeight + AfterFieldGap; // 198
-        const int PersonFieldTop = PersonLabelTop + CaptionToField; // 218
-        const int PersonNoteTop = PersonFieldTop + FieldHeight + AfterPersonToNote; // 252
-        const int NumberLabelTop = PersonNoteTop + 14 + AfterNoteGap; // 280
-        const int NumberFieldTop = NumberLabelTop + CaptionToField; // 300
-        const int ExtraRowTop = NumberFieldTop + FieldHeight + AfterFieldGap; // 336（桁数／強調）
+        // 顧客コンボ下→ラベル形式、ラベル形式下→会社名の余白（詰まり解消）。
+        const int AfterCustomerGap = 14, AfterFormatGap = 14;
+        const int CustomerCaptionTop = 6, CustomerFieldTop = 22;
+        const int FormatCaptionTop = CustomerFieldTop + FieldHeight + AfterCustomerGap; // 62
+        const int FormatFieldTop = FormatCaptionTop + CaptionToField; // 82
+        const int HeaderLabelTop = FormatFieldTop + FieldHeight + AfterFormatGap; // 122
+        const int HeaderFieldTop = HeaderLabelTop + CaptionToField; // 142
+        const int RoleLabelTop = HeaderFieldTop + FieldHeight + AfterFieldGap; // 178
+        const int RoleFieldTop = RoleLabelTop + CaptionToField; // 198
+        const int PersonLabelTop = RoleFieldTop + FieldHeight + AfterFieldGap; // 234
+        const int PersonFieldTop = PersonLabelTop + CaptionToField; // 254
+        const int PersonNoteTop = PersonFieldTop + FieldHeight + AfterPersonToNote; // 288
+        const int NumberLabelTop = PersonNoteTop + 14 + AfterNoteGap; // 316
+        const int NumberFieldTop = NumberLabelTop + CaptionToField; // 336
+        const int ExtraRowTop = NumberFieldTop + FieldHeight + AfterFieldGap; // 372（桁数／強調）
         void Field(Control c, int x, int y, int width) {
             int h = (c is Label) ? LabelFieldHeight : FieldHeight;
             c.SetBounds(x,y,width,h); Controls.Add(c);
@@ -252,8 +259,8 @@ public MainForm(string settingsFile)
             Text = "統合ネームラベル"; Font = new Font("Yu Gothic UI", 9);
             AutoScaleMode = AutoScaleMode.Dpi; ClientSize = new Size(FormClientWidth, FormClientHeight);
             FormBorderStyle = FormBorderStyle.FixedSingle; MaximizeBox = false; StartPosition = FormStartPosition.CenterScreen;
-            Label customerCaption=Caption("顧客",LeftX,6);customerCaption.Width=80;Controls.Add(customerCaption); Field(customers,LeftX,22,300);
-            Button generic=new Button {Text="汎用ラベル"}; Field(generic,GenericLeft,6,GenericWidth);
+            Label customerCaption=Caption("顧客",LeftX,CustomerCaptionTop);customerCaption.Width=80;Controls.Add(customerCaption); Field(customers,LeftX,CustomerFieldTop,300);
+            Button generic=new Button {Text="汎用ラベル"}; Field(generic,GenericLeft,CustomerCaptionTop,GenericWidth);
             generic.Click+=delegate {using(GenericLabelForm dlg=new GenericLabelForm(preferences)) dlg.ShowDialog(this); UpdatePreview();};
             // メイン顧客欄：DropDown で直接入力し、Matches（名前・読み）で候補を絞る（別ダイアログ不要）
             formats.DropDownStyle=ComboBoxStyle.DropDownList;
@@ -265,7 +272,7 @@ public MainForm(string settingsFile)
             kinds.Items.AddRange(LabelRenderer.Titles);
             for(int i=4;i<LabelCatalog.Items.Length;i++) kinds.Items.Add(LabelCatalog.Items[i].Format);
             formats.DropDownWidth=480;
-            Controls.Add(Caption("ラベル形式",LeftX,48)); Field(formats,LeftX,64,300);
+            Controls.Add(Caption("ラベル形式",LeftX,FormatCaptionTop)); Field(formats,LeftX,FormatFieldTop,300);
             headerLabel.Text="会社名 / 部署"; Field(headerLabel,LeftX,HeaderLabelTop,300); Field(header,LeftX,HeaderFieldTop,FieldWidth);
             department.DropDownStyle=ComboBoxStyle.DropDownList; department.Items.AddRange(new object[] {"製造課 冷食", "製造課 ハムソー", "工務課", "商品開発課", "生産管理課", "総務課", "調達課", "品質保証部"}); Field(department,LeftX,HeaderFieldTop,FieldWidth); department.Visible=false;
             colorDepartment.DropDownStyle=ComboBoxStyle.DropDownList; colorDepartment.Items.AddRange(LabelCatalog.ColorDepartments); Field(colorDepartment,LeftX,HeaderFieldTop,FieldWidth); colorDepartment.Visible=false;
@@ -919,6 +926,9 @@ public MainForm(string settingsFile)
             if(FormBorderStyle!=FormBorderStyle.FixedSingle)throw new Exception("メイン画面が固定サイズでない");
             if(MaximizeBox)throw new Exception("メイン画面の最大化が有効のまま");
             if(ClientSize.Width!=FormClientWidth || ClientSize.Height<FormClientHeight)throw new Exception("既定 ClientSize が想定と違う "+ClientSize.Width+"x"+ClientSize.Height);
+            // 顧客コンボ下→ラベル形式、ラベル形式下→会社名の上下余白
+            if(formats.Top<customers.Bottom+AfterCustomerGap+CaptionToField-1) throw new Exception("顧客欄とラベル形式の上下余白が不足 "+customers.Bottom+" / "+formats.Top);
+            if(headerLabel.Top<formats.Bottom+AfterFormatGap-1) throw new Exception("ラベル形式と会社名見出しの上下余白が不足 "+formats.Bottom+" / "+headerLabel.Top);
             Control genericBtn=null;
             foreach(Control c in Controls) if(c is Button && c.Text=="汎用ラベル") { genericBtn=c; break; }
             if(genericBtn==null) throw new Exception("汎用ラベルボタンが見つからない");
