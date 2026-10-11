@@ -40,9 +40,19 @@ jobs:
         shell: pwsh
         run: |
           $out = Join-Path $env:RUNNER_TEMP 'barcode-verify'
-          & '.\統合ネームラベル\統合ネームラベル.exe' --verify-barcode $out
-          if ($LASTEXITCODE -ne 0) { throw 'barcode verification failed' }
-          Get-Content -LiteralPath (Join-Path $out 'barcode-verification.txt') -Encoding UTF8
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $exe = (Resolve-Path -LiteralPath '.\統合ネームラベル\統合ネームラベル.exe').Path
+          # WinExe は & 実行だと $LASTEXITCODE が null になり得るため Start-Process で終了コードを取る
+          $proc = Start-Process -FilePath $exe -ArgumentList @('--verify-barcode', $out) -Wait -PassThru -NoNewWindow
+          $err = Join-Path $out 'error.txt'
+          $ok = Join-Path $out 'barcode-verification.txt'
+          if ($proc.ExitCode -ne 0) {
+            if (Test-Path -LiteralPath $err) { Get-Content -LiteralPath $err -Encoding UTF8 | Write-Host }
+            throw "barcode verification failed (exit=$($proc.ExitCode))"
+          }
+          if (!(Test-Path -LiteralPath $ok)) { throw 'barcode-verification.txt was not written' }
+          Get-Content -LiteralPath $ok -Encoding UTF8
+
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4

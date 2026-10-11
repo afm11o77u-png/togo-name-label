@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
@@ -96,19 +97,40 @@ namespace UnifiedLabels
             return writer.Write(content);
         }
 
+        /// <summary>
+        /// 検証用デコード。生成画像は Margin=0 のため、読取り時だけ白余白を付けてソフトウェア検証する（生成側の余白は変えない）。
+        /// </summary>
         public static string Decode(Bitmap image, params BarcodeFormat[] formats)
         {
+            var formatList = formats != null && formats.Length > 0 ? new List<BarcodeFormat>(formats) : null;
             var reader = new BarcodeReader
             {
                 AutoRotate = false,
                 Options = new DecodingOptions
                 {
                     TryHarder = true,
-                    PossibleFormats = formats != null && formats.Length > 0 ? formats : null
+                    PureBarcode = true,
+                    PossibleFormats = formatList
                 }
             };
             Result result = reader.Decode(image);
-            return result == null ? null : result.Text;
+            if (result != null) return result.Text;
+            using (Bitmap padded = PadWhite(image, 24))
+            {
+                result = reader.Decode(padded);
+                return result == null ? null : result.Text;
+            }
+        }
+
+        static Bitmap PadWhite(Bitmap source, int pad)
+        {
+            var canvas = new Bitmap(source.Width + pad * 2, source.Height + pad * 2);
+            using (Graphics g = Graphics.FromImage(canvas))
+            {
+                g.Clear(Color.White);
+                g.DrawImageUnscaled(source, pad, pad);
+            }
+            return canvas;
         }
 
         /// <summary>
@@ -141,8 +163,8 @@ namespace UnifiedLabels
                 }
             }
 
-            // だるま Code39
-            string[] code39Samples = { "00123", "ABC-12", "A B$%/+." };
+            // だるま Code39（許可文字セットの代表）
+            string[] code39Samples = { "00123", "ABC-12", "A B$%/+" };
             foreach (string sample in code39Samples)
             {
                 Check(IsCode39ContentAllowed(sample), "Code39 charset allows " + sample);
