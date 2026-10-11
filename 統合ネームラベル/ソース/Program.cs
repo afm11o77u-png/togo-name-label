@@ -908,12 +908,14 @@ public MainForm(string settingsFile)
             if(!UserSettings.Matches("Umios Hokkaido 札幌工場","ＵＭＩＯＳ")||!UserSettings.Matches("よつ葉乳業","よつ葉")||!UserSettings.Matches("よつ葉乳業㈱十勝工場","よつば")||!UserSettings.Matches("よつ葉乳業㈱十勝工場","ヨツバ")||!UserSettings.Matches("Umios Hokkaido 札幌工場","うみおす")||UserSettings.Matches("だるま食品","存在しない"))throw new Exception("検索の検証失敗");
             if(FormBorderStyle!=FormBorderStyle.FixedSingle)throw new Exception("メイン画面が固定サイズでない");
             if(MaximizeBox)throw new Exception("メイン画面の最大化が有効のまま");
+            // Shown で緑／青帯を同期してから UI 検証（--verify / --verify-layout と同じ。ハンドル生成前だと帯が未確定のまま）
+            ShowInTaskbar=false; Opacity=0; Show(); Application.DoEvents();
             // 幅は設計どおり必須。高さは FormClientHeight 以上を要求するが、
             // CI 等で作業領域が足りず OS が縮める場合はステータス帯まで収まることだけ見る。
             if(ClientSize.Width!=FormClientWidth)throw new Exception("既定 ClientSize が想定と違う "+ClientSize.Width+"x"+ClientSize.Height);
             if(ClientSize.Height<FormClientHeight){
                 int frame=Height-ClientSize.Height;
-                Rectangle work=Screen.FromControl(this).WorkingArea;
+                Rectangle work=Screen.PrimaryScreen.WorkingArea;
                 if(work.Height>=FormClientHeight+frame)throw new Exception("既定 ClientSize が想定と違う "+ClientSize.Width+"x"+ClientSize.Height);
                 if(status.Bottom>ClientSize.Height)throw new Exception("既定 ClientSize が高さ不足 "+ClientSize.Width+"x"+ClientSize.Height);
             }
