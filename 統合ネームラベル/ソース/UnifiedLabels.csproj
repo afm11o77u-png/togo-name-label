@@ -1,4 +1,6 @@
-﻿<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
@@ -7,16 +9,57 @@
     <AssemblyName>統合ネームラベル</AssemblyName>
     <RootNamespace>UnifiedLabels</RootNamespace>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
-    <OutputPath>bin\$(Configuration)\</OutputPath>
+    <OutputPath>..\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppConfig>App.config</AppConfig>
+    <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <DisableImplicitNuGetFallbackFolder>true</DisableImplicitNuGetFallbackFolder>
+    <!-- packages.lock.json の RID 節と一致させる（Windows MSBuild 既定と揃える） -->
+    <RuntimeIdentifiers>win;win-arm64;win-x64;win-x86</RuntimeIdentifiers>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="System" /><Reference Include="System.Xml" />
+    <Reference Include="System" />
+    <Reference Include="System.Xml" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
-    <Reference Include="DotNetBarcode"><HintPath>..\DotNetBarcode.dll</HintPath><Private>True</Private></Reference>
-    <Compile Include="Program.cs" /><Compile Include="UserFeatures.cs" /><Compile Include="CatalogVerification.cs" /><Compile Include="LabelCatalog.cs" /><Compile Include="AdditionalCatalog.cs" /><Compile Include="GenericLabel.cs" />
+    <!-- 当面は新旧比較・実機確認のため同梱 DLL を残す（この変更では削除しない） -->
+    <Reference Include="DotNetBarcode">
+      <HintPath>..\DotNetBarcode.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="ZXing.Net" Version="[0.16.10]" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="BarcodeRenderer.cs" />
+    <Compile Include="UserFeatures.cs" />
+    <Compile Include="CatalogVerification.cs" />
+    <Compile Include="LabelCatalog.cs" />
+    <Compile Include="AdditionalCatalog.cs" />
+    <Compile Include="GenericLabel.cs" />
     <None Include="App.config" />
+    <None Include="packages.lock.json" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
