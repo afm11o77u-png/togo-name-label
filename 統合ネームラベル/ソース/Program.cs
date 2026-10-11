@@ -908,7 +908,15 @@ public MainForm(string settingsFile)
             if(!UserSettings.Matches("Umios Hokkaido 札幌工場","ＵＭＩＯＳ")||!UserSettings.Matches("よつ葉乳業","よつ葉")||!UserSettings.Matches("よつ葉乳業㈱十勝工場","よつば")||!UserSettings.Matches("よつ葉乳業㈱十勝工場","ヨツバ")||!UserSettings.Matches("Umios Hokkaido 札幌工場","うみおす")||UserSettings.Matches("だるま食品","存在しない"))throw new Exception("検索の検証失敗");
             if(FormBorderStyle!=FormBorderStyle.FixedSingle)throw new Exception("メイン画面が固定サイズでない");
             if(MaximizeBox)throw new Exception("メイン画面の最大化が有効のまま");
-            if(ClientSize.Width!=FormClientWidth || ClientSize.Height<FormClientHeight)throw new Exception("既定 ClientSize が想定と違う "+ClientSize.Width+"x"+ClientSize.Height);
+            // 幅は設計どおり必須。高さは FormClientHeight 以上を要求するが、
+            // CI 等で作業領域が足りず OS が縮める場合はステータス帯まで収まることだけ見る。
+            if(ClientSize.Width!=FormClientWidth)throw new Exception("既定 ClientSize が想定と違う "+ClientSize.Width+"x"+ClientSize.Height);
+            if(ClientSize.Height<FormClientHeight){
+                int frame=Height-ClientSize.Height;
+                Rectangle work=Screen.FromControl(this).WorkingArea;
+                if(work.Height>=FormClientHeight+frame)throw new Exception("既定 ClientSize が想定と違う "+ClientSize.Width+"x"+ClientSize.Height);
+                if(status.Bottom>ClientSize.Height)throw new Exception("既定 ClientSize が高さ不足 "+ClientSize.Width+"x"+ClientSize.Height);
+            }
             // 顧客コンボ下→ラベル形式、ラベル形式下→会社名の上下余白
             if(formats.Top<customers.Bottom+AfterCustomerGap+CaptionToField-1) throw new Exception("顧客欄とラベル形式の上下余白が不足 "+customers.Bottom+" / "+formats.Top);
             if(headerLabel.Top<formats.Bottom+AfterFormatGap-1) throw new Exception("ラベル形式と会社名見出しの上下余白が不足 "+formats.Bottom+" / "+headerLabel.Top);
