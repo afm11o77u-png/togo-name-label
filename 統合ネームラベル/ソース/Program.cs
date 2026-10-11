@@ -1016,6 +1016,8 @@ public MainForm(string settingsFile)
             if(SelectedCustomerIndex!=topCustomer)throw new Exception("Enter確定後の顧客インデックス不正");
             if(customers.Items.Count!=LabelCatalog.Customers.Length)throw new Exception("Enter確定後の全件復帰失敗");
             if(LabelCatalog.Items[active].Customer!=topCustomer)throw new Exception("Enter確定後に内容切替が走らない");
+            // 直前の夏服検証で lastFormats[0]=2 のままなので、小ネーム（QR）へ戻してから UI を見る
+            formats.SelectedIndex=0; Application.DoEvents();
             Show();person.Text="山田 太郎";number.Text="Y1234";UpdatePreview();Application.DoEvents();
             // 会社名欄が PreferredHeight 未満／氏名欄より明らかに低い／ラベルに埋もれるのを検出
             if(!header.Visible) throw new Exception("よつ葉小ネームで会社名欄が出ていない");
@@ -1033,7 +1035,7 @@ public MainForm(string settingsFile)
             // 他の多段（部署＋役職＋氏名）も同様に行間を確保
             SelectedCustomerIndex=2; formats.SelectedIndex=0; Application.DoEvents();
             if(department.Visible && roleLabel.Visible && roleLabel.Top<department.Bottom+4) throw new Exception("Umios札幌で部署と役職見出しが近い");
-            SelectedCustomerIndex=0; Application.DoEvents();
+            SelectedCustomerIndex=0; formats.SelectedIndex=0; Application.DoEvents();
             if(headerFont.Visible && header.Height+4<headerFont.Height) throw new Exception("会社名欄がptスピナーより低い "+header.Height+"<"+headerFont.Height);
             if(!personFont.Visible || !headerFont.Visible || !numberFont.Visible) throw new Exception("よつ葉のフォントサイズUIが表示されていない");
             if(roleFont.Visible) throw new Exception("よつ葉に役職ptが出ている");
