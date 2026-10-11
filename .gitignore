@@ -1,0 +1,10 @@
+# MSBuild / NuGet (ソース直下)
+統合ネームラベル/ソース/obj/
+統合ネームラベル/ソース/bin/
+packages/
+
+# ローカル検証出力
+barcode-verify-out/
+**/barcode-verification.txt
+**/error.txt
+**/test-settings.xml

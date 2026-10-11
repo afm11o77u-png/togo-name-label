@@ -2,51 +2,26 @@ name: Build Windows exe
 
 on:
   workflow_dispatch:
-    inputs:
-      commit_artifacts:
-        description: Commit built exe/config back to the triggering branch
-        type: boolean
-        default: true
   push:
     branches:
-      - 'cursor/publish-built-exe-*'
-      - 'cursor/ben-gama-excel-realign-9ee6'
-      - 'cursor/ben-gama-align-scale-9ee6'
-      - 'cursor/generic-row-position-5a78'
-      - 'cursor/generic-autofit-defaults-5a78'
-      - 'cursor/dan-size-two-row-a8df'
-      - 'cursor/customer-type-filter-6f83'
-      - 'cursor/customer-name-input-7b59'
-      - 'cursor/remove-picker-star-7b59'
-      - 'cursor/dan-size-align-update-914d'
-      - 'cursor/dan-size-resync-cc4d'
-      - 'cursor/dan-size-small-align-668a'
-      - 'cursor/dan-size-full-sync-6a71'
-      - 'cursor/remove-favorite-star-7b59'
-      - 'cursor/excel-font-band-sync-313d'
-      - 'cursor/per-field-font-ui-4d1b'
-      - 'cursor/customer-enter-select-fed5'
-      - 'cursor/window-resize-f0b9'
-      - 'cursor/garment-label-summary-c13d'
-      - 'cursor/tokyo-space-note-f670'
-      - 'cursor/form-placement-band-10fa'
-      - 'cursor/excel-full-resync-28ae'
-      - 'cursor/startup-placement-be94'
-      - 'cursor/umios-role-font-pt-903f'
-      - 'cursor/summer-select-banner-ac23'
-      - 'cursor/window-shrink-scale-7f77'
-      - 'cursor/company-field-layout-8989'
-      - 'cursor/enter-select-apply-eda6'
-      - 'cursor/compact-fixed-layout-3da3'
-      - 'cursor/asukai-spacing-selection-baae'
-      - 'cursor/umios-layout-enlarge-938e'
-      - 'cursor/customer-field-spacing-fddd'
+      - main
+      - 'cursor/**'
     paths:
       - '.github/workflows/build-windows.yml'
       - '統合ネームラベル/ソース/**'
+      - 'THIRD_PARTY_NOTICES.md'
+      - 'README.md'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/build-windows.yml'
+      - '統合ネームラベル/ソース/**'
+      - 'THIRD_PARTY_NOTICES.md'
+      - 'README.md'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -61,6 +36,14 @@ jobs:
           Set-Location -LiteralPath '統合ネームラベル/ソース'
           & '.\ビルド.ps1'
 
+      - name: Verify barcodes (ZXing)
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'barcode-verify'
+          & '.\統合ネームラベル\統合ネームラベル.exe' --verify-barcode $out
+          if ($LASTEXITCODE -ne 0) { throw 'barcode verification failed' }
+          Get-Content -LiteralPath (Join-Path $out 'barcode-verification.txt') -Encoding UTF8
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -68,20 +51,6 @@ jobs:
           path: |
             統合ネームラベル/統合ネームラベル.exe
             統合ネームラベル/統合ネームラベル.exe.config
+            統合ネームラベル/zxing.dll
             統合ネームラベル/DotNetBarcode.dll
           if-no-files-found: error
-
-      - name: Commit built artifacts to branch
-        if: ${{ github.event_name == 'push' || inputs.commit_artifacts }}
-        shell: pwsh
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- '統合ネームラベル/統合ネームラベル.exe' '統合ネームラベル/統合ネームラベル.exe.config'
-          if (git diff --cached --quiet) {
-            Write-Host 'No artifact changes to commit.'
-            exit 0
-          }
-          git commit -m "Rebuild 統合ネームラベル.exe on windows-latest (includes 汎用ラベル)"
-          git push origin "HEAD:$env:GITHUB_REF_NAME"
-

@@ -40,9 +40,8 @@ namespace UnifiedLabels
             if (kind == 2)
             {
                 if (String.IsNullOrWhiteSpace(d.Header)) return "従業員Noを入力してください。";
-                foreach (char c in d.Number)
-                    if ("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%".IndexOf(c) < 0)
-                        return "だるまの社員番号には半角数字・英大文字・記号（- . 空白 $ / + %）を使用してください。";
+                if (!BarcodeRenderer.IsCode39ContentAllowed(d.Number))
+                    return "だるまの社員番号には半角数字・英大文字・記号（- . 空白 $ / + %）を使用してください。";
             }
             return null;
         }
@@ -95,24 +94,8 @@ namespace UnifiedLabels
             if (kind == 2) Text(g, d.Number, gothic, LabelCatalog.PickFont(10, d.NumberFontSet, d.NumberFontPt), 110, 160);
             if (kind == 3) Text(g, d.Number, gothic, LabelCatalog.PickFont(11, d.NumberFontSet, d.NumberFontPt), 7, 150);
             if (String.IsNullOrWhiteSpace(d.Number)) return;
-            if (kind == 2)
-                foreach (char c in d.Number) if ("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%".IndexOf(c) < 0) return;
-            DotNetBarcode barcode = new DotNetBarcode(kind == 2 ? DotNetBarcode.Types.Code39 : DotNetBarcode.Types.QRCode);
-            barcode.QRQuitZone = 0;
-            if (kind == 2) barcode.WriteBar(d.Number, 15, 100, 260, 60, g);
-            else if (kind == 3) barcode.WriteBar(d.Number, 15, 100, 60, 60, g);
-            else
-            {
-                using (Bitmap bmp = new Bitmap(200,200))
-                {
-                    using (Graphics q = Graphics.FromImage(bmp)) { q.Clear(Color.White); barcode.WriteBar(d.Number,0,0,200,200,q); }
-                    GraphicsState state = g.Save();
-                    g.InterpolationMode = InterpolationMode.NearestNeighbor;
-                    g.PixelOffsetMode = PixelOffsetMode.Half;
-                    g.DrawImage(bmp, kind == 0 ? new Rectangle(156,50,30,30) : new Rectangle(255,115,45,45));
-                    g.Restore(state);
-                }
-            }
+            // QR / Code39 は BarcodeRenderer（ZXing.Net）へ集約。配置・大きさは従来どおり。
+            BarcodeRenderer.DrawForLabel(g, kind, d.Number);
         }
     }
 
@@ -1318,6 +1301,11 @@ public MainForm(string settingsFile)
         {
             Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
             try {
+                if(args.Length>=1 && args[0]=="--verify-barcode") {
+                    string folder=args.Length>=2?Path.GetFullPath(args[1]):Path.Combine(Path.GetTempPath(),"UnifiedNameLabels-barcode-verify");
+                    BarcodeRenderer.VerifyRepresentativeSamples(folder);
+                    return 0;
+                }
                 string settings=args.Length==2 && args[0].StartsWith("--verify")?Path.Combine(Path.GetFullPath(args[1]),"test-settings.xml"):Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"UnifiedNameLabels","settings.xml");
                 if(args.Length==2 && args[0]=="--verify-generic") {
                     using(GenericLabelForm generic=new GenericLabelForm(new UserSettings(settings))) generic.Verify(args[1]);
