@@ -15,6 +15,8 @@ cd 統合ネームラベル\ソース
 - NuGet: `ZXing.Net` **厳密に 0.16.10**（`packages.lock.json` + `RestoreLockedMode`）
 - 出力: `統合ネームラベル/統合ネームラベル.exe`（同フォルダーに `zxing.dll`、当面は `DotNetBarcode.dll` も同梱）
 
+ソースを変更したら、上記のビルドで得た `統合ネームラベル.exe`・`統合ネームラベル.exe.config`・`zxing.dll` も同じコミットに含めてください（リポジトリ上で最新の実行ファイルを揃える運用）。CI はビルド・検証のみ行い、exe の自動コミットはしません。
+
 ## バーコード検証（自動）
 
 ```powershell

@@ -3,11 +3,6 @@
 統合ネームラベル/ソース/bin/
 packages/
 
-# ビルド成果物（Git では管理せず、GitHub Actions artifact として配布）
-統合ネームラベル/統合ネームラベル.exe
-統合ネームラベル/統合ネームラベル.exe.config
-統合ネームラベル/zxing.dll
-
 # ローカル検証出力
 barcode-verify-out/
 **/barcode-verification.txt
