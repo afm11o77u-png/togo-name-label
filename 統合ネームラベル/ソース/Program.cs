@@ -890,6 +890,14 @@ public MainForm(string settingsFile)
         {
             try { action(); } catch(Exception ex) { status.Text="処理できませんでした: "+ex.Message; }
         }
+        /// <summary>プレビュー画素が異なるか（stride=1。CI のフォント代替でも取りこぼしにくい）。</summary>
+        static bool PreviewPixelsDiffer(Bitmap a,Bitmap b) {
+            if(a==null || b==null || a.Width!=b.Width || a.Height!=b.Height) return true;
+            for(int x=0;x<a.Width;x++)
+                for(int y=0;y<a.Height;y++)
+                    if(a.GetPixel(x,y)!=b.GetPixel(x,y)) return true;
+            return false;
+        }
         // Runs without sending a print job. Exercises every layout and input length.
         public void VerifyFeatures(string folder) {
             Directory.CreateDirectory(folder);
@@ -1039,38 +1047,42 @@ public MainForm(string settingsFile)
             if(headerFont.Visible && header.Height+4<headerFont.Height) throw new Exception("会社名欄がptスピナーより低い "+header.Height+"<"+headerFont.Height);
             if(!personFont.Visible || !headerFont.Visible || !numberFont.Visible) throw new Exception("よつ葉のフォントサイズUIが表示されていない");
             if(roleFont.Visible) throw new Exception("よつ葉に役職ptが出ている");
-            decimal beforePerson=personFont.Value;
             if(LabelCatalog.PickFont(18,false,99)!=18 || LabelCatalog.PickFont(18,true,5)!=18 || LabelCatalog.PickFont(18,true,40)!=40) throw new Exception("PickFontの安全な既定復帰が壊れている");
+            // 氏名pt: 短い英字＋離したptでフィット縮小の潰し合いを避け、全画素比較（CI のフォント代替対策）
+            person.Text="AB"; number.Text="Y1234"; Application.DoEvents();
+            changing=false; personFont.Value=8;
+            if(!Current().PersonFontSet || Current().PersonFontPt!=8f) throw new Exception("氏名pt変更が明示フラグになっていない");
             using(Bitmap a=CreatePreview(new PrintOffset())) {
-                changing=false; personFont.Value=beforePerson>=20?beforePerson-8:beforePerson+8;
-                if(!Current().PersonFontSet) throw new Exception("氏名pt変更が明示フラグになっていない");
+                personFont.Value=48;
+                if(Current().PersonFontPt!=48f) throw new Exception("氏名pt変更が反映されていない");
                 using(Bitmap b=CreatePreview(new PrintOffset())) {
-                    bool changed=false; for(int x=0;x<a.Width&&!changed;x+=3) for(int y=0;y<a.Height;y+=3) if(a.GetPixel(x,y)!=b.GetPixel(x,y)){changed=true;break;}
-                    if(!changed) throw new Exception("氏名フォントサイズ変更がプレビューに反映されていない");
+                    if(!PreviewPixelsDiffer(a,b)) throw new Exception("氏名フォントサイズ変更がプレビューに反映されていない");
                 }
             }
+            person.Text="山田 太郎"; Application.DoEvents();
             // Umios 大ネーム（QR）: Legacy（札幌）と Layout=QR（十勝）で役職ptが出てプレビューに効くこと
             SelectedCustomerIndex=2; formats.SelectedIndex=0; Application.DoEvents();
             if(active!=3 || LabelCatalog.Items[active].Layout!="Legacy") throw new Exception("Umios札幌・大ネーム（QR）の形式が違う");
             if(!role.Visible || !roleFont.Visible || !LabelCatalog.Items[active].UsesRoleFont) throw new Exception("Umios札幌の役職ptが出ていない");
-            role.Text="主任"; department.SelectedIndex=0; person.Text="山田 太郎"; number.Text="123456"; UpdatePreview();
+            role.Text="AB"; department.SelectedIndex=0; person.Text="山田 太郎"; number.Text="123456"; UpdatePreview();
+            changing=false; roleFont.Value=10;
+            if(!Current().RoleFontSet || Current().RoleFontPt!=10f) throw new Exception("役職pt変更が明示フラグになっていない");
             using(Bitmap a=CreatePreview(new PrintOffset())) {
-                changing=false; decimal beforeRole=roleFont.Value; roleFont.Value=beforeRole>=30?beforeRole-12:beforeRole+12;
-                if(!Current().RoleFontSet || Current().RoleFontPt!=(float)roleFont.Value) throw new Exception("役職pt変更が明示フラグになっていない");
+                roleFont.Value=40;
+                if(Current().RoleFontPt!=40f) throw new Exception("役職pt変更が反映されていない");
                 using(Bitmap b=CreatePreview(new PrintOffset())) {
-                    bool changed=false; for(int x=0;x<a.Width&&!changed;x+=3) for(int y=0;y<a.Height;y+=3) if(a.GetPixel(x,y)!=b.GetPixel(x,y)){changed=true;break;}
-                    if(!changed) throw new Exception("Umios札幌の役職pt変更がプレビューに反映されていない");
+                    if(!PreviewPixelsDiffer(a,b)) throw new Exception("Umios札幌の役職pt変更がプレビューに反映されていない");
                 }
             }
             SelectedCustomerIndex=12; formats.SelectedIndex=0; Application.DoEvents();
             if(LabelCatalog.Items[active].Layout!="QR" || !role.Visible || !roleFont.Visible) throw new Exception("Umios十勝の役職ptが出ていない");
-            role.Text="主任"; department.SelectedIndex=0; person.Text="山田 太郎"; number.Text="123456"; UpdatePreview();
+            role.Text="AB"; department.SelectedIndex=0; person.Text="山田 太郎"; number.Text="123456"; UpdatePreview();
+            changing=false; roleFont.Value=10;
+            if(!Current().RoleFontSet) throw new Exception("十勝の役職pt変更が明示フラグになっていない");
             using(Bitmap a=CreatePreview(new PrintOffset())) {
-                changing=false; decimal beforeRole=roleFont.Value; roleFont.Value=beforeRole>=30?beforeRole-12:beforeRole+12;
-                if(!Current().RoleFontSet) throw new Exception("十勝の役職pt変更が明示フラグになっていない");
+                roleFont.Value=40;
                 using(Bitmap b=CreatePreview(new PrintOffset())) {
-                    bool changed=false; for(int x=0;x<a.Width&&!changed;x+=3) for(int y=0;y<a.Height;y+=3) if(a.GetPixel(x,y)!=b.GetPixel(x,y)){changed=true;break;}
-                    if(!changed) throw new Exception("Umios十勝の役職pt変更がプレビューに反映されていない");
+                    if(!PreviewPixelsDiffer(a,b)) throw new Exception("Umios十勝の役職pt変更がプレビューに反映されていない");
                 }
             }
             SelectedCustomerIndex=0; formats.SelectedIndex=0; person.Text="山田 太郎"; number.Text="Y1234"; Application.DoEvents();
