@@ -53,6 +53,34 @@ jobs:
           if (!(Test-Path -LiteralPath $ok)) { throw 'barcode-verification.txt was not written' }
           Get-Content -LiteralPath $ok -Encoding UTF8
 
+      # 既存検証モード（実プリンターへは印刷しない。描画・入力・設定・レイアウトの回帰用）
+      - name: Verify app modes
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path -LiteralPath '.\統合ネームラベル\統合ネームラベル.exe').Path
+          $modes = @(
+            @{ Arg = '--verify';          Folder = 'verify';          Ok = 'verification.txt' },
+            @{ Arg = '--verify-features'; Folder = 'verify-features'; Ok = 'features-verification.txt' },
+            @{ Arg = '--verify-retained'; Folder = 'verify-retained'; Ok = 'retained-verification.txt' },
+            @{ Arg = '--verify-latest';   Folder = 'verify-latest';   Ok = 'latest-verification.txt' },
+            @{ Arg = '--verify-generic';  Folder = 'verify-generic';  Ok = 'generic-verification.txt' },
+            @{ Arg = '--verify-layout';   Folder = 'verify-layout';   Ok = 'verification.txt' }
+          )
+          foreach ($m in $modes) {
+            $out = Join-Path $env:RUNNER_TEMP $m.Folder
+            New-Item -ItemType Directory -Force -Path $out | Out-Null
+            Write-Host "=== $($m.Arg) -> $out ==="
+            # WinExe は & 実行だと $LASTEXITCODE が null になり得るため Start-Process で終了コードを取る
+            $proc = Start-Process -FilePath $exe -ArgumentList @($m.Arg, $out) -Wait -PassThru -NoNewWindow
+            $err = Join-Path $out 'error.txt'
+            $ok = Join-Path $out $m.Ok
+            if ($proc.ExitCode -ne 0) {
+              if (Test-Path -LiteralPath $err) { Get-Content -LiteralPath $err -Encoding UTF8 | Write-Host }
+              throw "$($m.Arg) failed (exit=$($proc.ExitCode))"
+            }
+            if (!(Test-Path -LiteralPath $ok)) { throw "$($m.Ok) was not written for $($m.Arg)" }
+            Get-Content -LiteralPath $ok -Encoding UTF8 | Write-Host
+          }
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
