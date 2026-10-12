@@ -235,6 +235,11 @@ PrintOffset CurrentOffset() { return temporaryOffset??preferences.Get(OffsetKey)
 public MainForm(string settingsFile)
         {
             preferences=new UserSettings(settingsFile);
+            // 破損・不正設定の退避復旧時のみ通知（未作成の通常初回起動では出さない）
+            if(preferences.RecoveredFromCorrupt) {
+                string detail=string.IsNullOrEmpty(preferences.BrokenBackupPath)?"":"\r\n\r\n退避ファイル:\r\n"+preferences.BrokenBackupPath;
+                MessageBox.Show("設定ファイルを読めなかったため、退避して初期設定で起動しました。"+detail,"設定の読み込み",MessageBoxButtons.OK,MessageBoxIcon.Information);
+            }
             preferences.RenameCustomer("弁釜札幌","弁釜本社/札幌/八軒/旭川/函館/ローズD/");
             preferences.RenameCustomer("よつ葉根釧工場","よつ葉根釧/宗谷工場");
             preferences.RenameCustomer("コープフーズ石狩食品工場","コープフーズ / 石狩食品工場");
@@ -912,7 +917,34 @@ public MainForm(string settingsFile)
             string testPath=Path.Combine(Path.GetFullPath(folder),"persistence.xml");
             UserSettings s=new UserSettings(testPath);s.Favorites.Clear();s.Recent.Clear();s.Toggle("よつ葉乳業");s.Visit("だるま食品");s.Visit("よつ葉乳業");s.Visit("だるま食品");s.Set("printer-A|small",new PrintOffset(1.2m,-.3m));s.Set("printer-A|big",new PrintOffset(-2m,3m));
             UserSettings r=new UserSettings(testPath);
-            if(!r.Favorites.Contains("よつ葉乳業")||r.Recent.Count!=2||r.Recent[0]!="だるま食品"||r.Get("printer-A|small").X!=1.2m||r.Get("printer-A|big").Y!=3||r.Get("printer-B|small").X!=0)throw new Exception("設定保存の検証失敗");
+            if(r.RecoveredFromCorrupt||!r.Favorites.Contains("よつ葉乳業")||r.Recent.Count!=2||r.Recent[0]!="だるま食品"||r.Get("printer-A|small").X!=1.2m||r.Get("printer-A|big").Y!=3||r.Get("printer-B|small").X!=0)throw new Exception("設定保存の検証失敗");
+            // 破損・不正数値・範囲外の読込み失敗 → 退避・初期設定続行。未作成は静かに初期化。
+            string corruptDir=Path.Combine(Path.GetFullPath(folder),"corrupt-recovery");
+            Directory.CreateDirectory(corruptDir);
+            string corruptPath=Path.Combine(corruptDir,"settings.xml");
+            File.WriteAllText(corruptPath,"<<<not-xml>>>",Encoding.UTF8);
+            UserSettings brokenXml=new UserSettings(corruptPath);
+            if(!brokenXml.RecoveredFromCorrupt||string.IsNullOrEmpty(brokenXml.BrokenBackupPath))throw new Exception("XML破損時の復旧フラグが立っていない");
+            if(brokenXml.Favorites.Count!=0||brokenXml.Recent.Count!=0||brokenXml.Get("any").X!=0)throw new Exception("XML破損後が初期設定でない");
+            if(File.Exists(corruptPath))throw new Exception("破損settings.xmlが退避後も残っている");
+            if(!File.Exists(brokenXml.BrokenBackupPath)||Path.GetFileName(brokenXml.BrokenBackupPath).IndexOf("settings.broken-")!=0)throw new Exception("退避ファイル名が不正");
+            if(File.ReadAllText(brokenXml.BrokenBackupPath,Encoding.UTF8)!="<<<not-xml>>>")throw new Exception("退避内容が元と違う");
+            brokenXml.Toggle("復旧後保存");
+            if(!File.Exists(corruptPath))throw new Exception("復旧後の安全保存でsettings.xmlが作られない");
+            File.WriteAllText(corruptPath,"CONTENT_A",Encoding.UTF8);
+            UserSettings again=new UserSettings(corruptPath);
+            if(!again.RecoveredFromCorrupt||again.BrokenBackupPath==brokenXml.BrokenBackupPath)throw new Exception("2回目退避が衝突または未作成");
+            if(File.ReadAllText(brokenXml.BrokenBackupPath,Encoding.UTF8)!="<<<not-xml>>>")throw new Exception("先の退避ファイルが上書き・削除された");
+            if(File.ReadAllText(again.BrokenBackupPath,Encoding.UTF8)!="CONTENT_A")throw new Exception("2回目退避の内容が違う");
+            File.WriteAllText(corruptPath,"<settings><offset key='a' x='not-a-number' y='1'/></settings>",Encoding.UTF8);
+            UserSettings badNum=new UserSettings(corruptPath);
+            if(!badNum.RecoveredFromCorrupt||badNum.Get("a").X!=0)throw new Exception("不正数値の復旧失敗");
+            File.WriteAllText(corruptPath,"<settings><offset key='a' x='100' y='0'/></settings>",Encoding.UTF8);
+            UserSettings outOfRange=new UserSettings(corruptPath);
+            if(!outOfRange.RecoveredFromCorrupt||outOfRange.Get("a").X!=0)throw new Exception("範囲外数値の復旧失敗");
+            string missingPath=Path.Combine(corruptDir,"missing-settings.xml");
+            UserSettings missing=new UserSettings(missingPath);
+            if(missing.RecoveredFromCorrupt||missing.BrokenBackupPath!=null)throw new Exception("未作成時に復旧扱いされた");
             if(!UserSettings.Matches("Umios Hokkaido 札幌工場","ＵＭＩＯＳ")||!UserSettings.Matches("よつ葉乳業","よつ葉")||!UserSettings.Matches("よつ葉乳業㈱十勝工場","よつば")||!UserSettings.Matches("よつ葉乳業㈱十勝工場","ヨツバ")||!UserSettings.Matches("Umios Hokkaido 札幌工場","うみおす")||UserSettings.Matches("だるま食品","存在しない"))throw new Exception("検索の検証失敗");
             if(FormBorderStyle!=FormBorderStyle.FixedSingle)throw new Exception("メイン画面が固定サイズでない");
             if(MaximizeBox)throw new Exception("メイン画面の最大化が有効のまま");
@@ -1102,7 +1134,7 @@ public MainForm(string settingsFile)
             }
             kinds.SelectedIndex=1;person.Text="山田 太郎";number.Text="Y1234";
             using(OffsetDialog dlg=new OffsetDialog("プリンターごと・ラベル形式ごとに保存\r\nよつ葉乳業 ／ 大ネーム",new PrintOffset(.5m,-.3m),CreatePreview,delegate{throw new Exception("実印刷は禁止");},delegate{})){dlg.Show();Application.DoEvents();using(Bitmap b=new Bitmap(dlg.Width,dlg.Height)){dlg.DrawToBitmap(b,new Rectangle(Point.Empty,dlg.Size));b.Save(Path.Combine(folder,"adjustment.png"));}dlg.Close();}
-            File.WriteAllText(Path.Combine(folder,"features-verification.txt"),"メイン顧客欄の入力絞り込み（読み・全半角）・Enter先頭候補確定と内容切替・設定再読込・お気に入り・最近の重複除去・プリンター形式別分離・5形式の調整表示・印刷描画を確認。実印刷なし。",Encoding.UTF8);Hide();
+            File.WriteAllText(Path.Combine(folder,"features-verification.txt"),"メイン顧客欄の入力絞り込み（読み・全半角）・Enter先頭候補確定と内容切替・設定再読込・破損設定の退避復旧・お気に入り・最近の重複除去・プリンター形式別分離・5形式の調整表示・印刷描画を確認。実印刷なし。",Encoding.UTF8);Hide();
         }
         public void Verify(string folder)
         {
