@@ -9,10 +9,54 @@ using System.Xml;
 namespace UnifiedLabels {
  public sealed class PrintOffset { public decimal X,Y; public PrintOffset() {} public PrintOffset(decimal x,decimal y) {X=x;Y=y;} }
  public sealed class UserSettings {
+  // 印字位置調整 UI（OffsetDialog）と同じ許容範囲。範囲外は読込み失敗として退避する。
+  const decimal OffsetMin=-10m, OffsetMax=10m;
   readonly string path;
   public readonly List<string> Favorites=new List<string>(), Recent=new List<string>();
   readonly Dictionary<string,PrintOffset> offsets=new Dictionary<string,PrintOffset>();
-  public UserSettings(string file) {path=file; if(!File.Exists(path)) return; XmlDocument d=new XmlDocument(); d.Load(path); foreach(XmlNode n in d.SelectNodes("/settings/favorite")) Favorites.Add(n.InnerText); foreach(XmlNode n in d.SelectNodes("/settings/recent")) Recent.Add(n.InnerText); foreach(XmlElement n in d.SelectNodes("/settings/offset")) offsets[n.GetAttribute("key")]=new PrintOffset(Decimal.Parse(n.GetAttribute("x"),CultureInfo.InvariantCulture),Decimal.Parse(n.GetAttribute("y"),CultureInfo.InvariantCulture)); }
+  /// <summary>既存設定の内容不正で退避し、空の初期設定で続行したとき true。ファイル未作成時は false。</summary>
+  public bool RecoveredFromCorrupt { get; private set; }
+  /// <summary>退避した settings.broken-*.xml のフルパス。通常起動では null。</summary>
+  public string BrokenBackupPath { get; private set; }
+  public UserSettings(string file) {
+   path=file;
+   if(!File.Exists(path)) return; // 未作成は従来どおり静かに初期設定
+   try { Load(); }
+   catch {
+    string backup=QuarantineBroken();
+    Favorites.Clear(); Recent.Clear(); offsets.Clear();
+    BrokenBackupPath=backup;
+    RecoveredFromCorrupt=true;
+   }
+  }
+  void Load() {
+   XmlDocument d=new XmlDocument();
+   d.Load(path);
+   foreach(XmlNode n in d.SelectNodes("/settings/favorite")) Favorites.Add(n.InnerText);
+   foreach(XmlNode n in d.SelectNodes("/settings/recent")) Recent.Add(n.InnerText);
+   foreach(XmlElement n in d.SelectNodes("/settings/offset")) {
+    decimal x=Decimal.Parse(n.GetAttribute("x"),CultureInfo.InvariantCulture);
+    decimal y=Decimal.Parse(n.GetAttribute("y"),CultureInfo.InvariantCulture);
+    if(x<OffsetMin||x>OffsetMax||y<OffsetMin||y>OffsetMax)
+     throw new FormatException("offset out of range");
+    offsets[n.GetAttribute("key")]=new PrintOffset(x,y);
+   }
+  }
+  /// <summary>壊れた settings.xml を同フォルダへ日時付きで退避（既存退避は上書きしない）。</summary>
+  string QuarantineBroken() {
+   string dir=Path.GetDirectoryName(Path.GetFullPath(path));
+   if(string.IsNullOrEmpty(dir)) dir=".";
+   Directory.CreateDirectory(dir);
+   string stamp=DateTime.Now.ToString("yyyyMMdd-HHmmss");
+   string dest=Path.Combine(dir,"settings.broken-"+stamp+".xml");
+   int n=0;
+   while(File.Exists(dest)) {
+    n++;
+    dest=Path.Combine(dir,"settings.broken-"+stamp+"-"+n+".xml");
+   }
+   File.Move(path,dest);
+   return dest;
+  }
   public PrintOffset Get(string key) {PrintOffset p;return offsets.TryGetValue(key,out p)?new PrintOffset(p.X,p.Y):new PrintOffset();}
   public void Set(string key,PrintOffset p) {PrintOffset old=Get(key);bool had=offsets.ContainsKey(key); offsets[key]=new PrintOffset(p.X,p.Y);try {Save();} catch {if(had) offsets[key]=old;else offsets.Remove(key);throw;} }
   public void Visit(string name) {Recent.Remove(name);Recent.Insert(0,name);if(Recent.Count>10) Recent.RemoveRange(10,Recent.Count-10);Save();}
