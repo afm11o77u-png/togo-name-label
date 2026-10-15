@@ -24,8 +24,8 @@ namespace UnifiedLabels {
   }
   public void VerifyLatest(string folder){
    Directory.CreateDirectory(folder);Show();
-   // SourceRow は五十音順2（md5 ca88ea51…）の行番号
-   foreach(int row in new[]{222,233,235,33,78,226,227,228,140,12,161,10,120,199,174,165,171,109,48,157,77}){
+   // SourceRow は五十音順2（鱗幸=230/231）の行番号
+   foreach(int row in new[]{222,235,237,33,78,226,227,230,140,12,161,10,120,199,174,165,171,109,48,157,77}){
     kinds.SelectedIndex=LatestRow(row);var spec=LabelCatalog.Items[active];
     if(department.Items.Count>0)department.SelectedIndex=0;
     if(colorDepartment.Items.Count>0)colorDepartment.SelectedIndex=0;
@@ -36,7 +36,7 @@ namespace UnifiedLabels {
     if(spec.Layout=="SplitCode")person.Text="M-23";
     if(spec.Layout=="OptionalHeading")header.Text="製造";
     if(spec.Layout=="InitialName")role.Text="太";
-    if(spec.Layout=="FreeText")person.Text=row==235?"タロウ":"LL";
+    if(spec.Layout=="FreeText")person.Text=row==237?"タロウ":"LL";
     if(spec.Reading=="ローマ字")person.Text="Yamada Taro";
     UpdatePreview();Need(!status.Text.StartsWith("処理できません"),"Preview error "+row+" "+status.Text);
     if(spec.Pending=="")Need(LabelRenderer.Validate(active,Current())==null,"Invalid example "+row+" "+LabelRenderer.Validate(active,Current()));
@@ -49,10 +49,27 @@ namespace UnifiedLabels {
     if(row==33){Need(!colorDepartment.Visible,"Duplicate department selection");department.SelectedItem="洋菓子チーム";Need(LabelCatalog.ColorName(active,Current())=="赤","Department color not linked");}
     if(row==222){Need(LabelCatalog.ColorName(active,Current())=="緑？","Fresh fish provisional color");header.Text="その他";Need(LabelCatalog.ColorName(active,Current())=="先方から指定","Unspecified department color");header.Text="鮮魚";}
     if(row==140 || row==12 || row==161){Need(LabelCatalog.ColorName(active,Current()).Contains("？"),"Question mark lost");Need(LabelCatalog.Swatch(LabelCatalog.ColorName(active,Current()))==(row==12?Color.LightCoral:Color.LightSkyBlue),"Provisional swatch wrong");}
-    if(row==228){Need(LabelCatalog.ColorName(active,Current())=="先方から指定","Unknown color invents a color");Need(header.Visible&&!header.ReadOnly,"Department not editable");header.Text="";Need(LabelRenderer.Validate(active,Current())==null,"Optional department blocks print");header.Text="製造";}
+    if(row==230){
+     Need(LabelCatalog.ColorName(active,Current())=="赤","Rinko role color");
+     Need(spec.ColorGuide.IndexOf("先方から指定？")>=0,"Rinko ColorGuide lost question mark");
+     Need(header.Visible&&!header.ReadOnly,"Department not editable");
+     header.Text="";Need(LabelRenderer.Validate(active,Current())==null,"Optional department blocks print");header.Text="製造";
+     // 既存5色凡例に黄を含める。黄色専用の重複形式は置かない（起動時も復活させない）。
+     var uniq=new System.Collections.Generic.List<string>();
+     foreach(string c in LabelCatalog.GroupColors(active)) if(!uniq.Contains(c)) uniq.Add(c);
+     Need(uniq.Count==5 && uniq.Contains("黄") && uniq.Contains("白"),"Rinko shared 5-color legend");
+     int legendVisible=0; bool yellowCard=false;
+     foreach(Label card in colorLegend){ if(card.Visible){ legendVisible++; if(card.Text.StartsWith("黄")) yellowCard=true; } }
+     Need(legendVisible==5 && yellowCard,"Rinko yellow belongs in shared legend cards");
+     int yellowOnly=0; for(int i=0;i<LabelCatalog.Items.Length;i++) if(LabelCatalog.Items[i].Customer==81 && LabelCatalog.Items[i].FixedColor=="黄") yellowOnly++;
+     Need(yellowOnly==0,"Rinko must not keep a yellow-only format");
+     colorDepartment.SelectedIndex=System.Array.IndexOf(LabelCatalog.ColorGroups(active),"特殊色");
+     Need(LabelCatalog.ColorName(active,Current())=="黄","Rinko special-color yellow");
+     colorDepartment.SelectedIndex=0;
+    }
     if(row==120)Need(spec.Heading=="トテッポ工房" && spec.Layout=="HeadingName","TotepPo fixed header");
     CaptureLatest(folder,"row-"+row);
-    if(row==233){role.Text="0";CaptureLatest(folder,"row-233-no-stars");role.Text="abc";Need(LabelRenderer.Validate(active,Current())!=null,"Invalid star count accepted");}
+    if(row==235){role.Text="0";CaptureLatest(folder,"row-235-no-stars");role.Text="abc";Need(LabelRenderer.Validate(active,Current())!=null,"Invalid star count accepted");}
     if(row==171){person.Text="M-X";Need(LabelRenderer.Validate(active,Current())!=null,"Invalid split code accepted");}
    }
    int sapporoCohort=-1,asahikawaCohort=-1;
