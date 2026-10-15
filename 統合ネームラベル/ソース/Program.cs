@@ -105,7 +105,8 @@ namespace UnifiedLabels
         readonly ComboBox department = new ComboBox();
         readonly ComboBox colorDepartment = new ComboBox();
         readonly Label sampleColor = new Label();
-        readonly Label[] colorLegend = {new Label(),new Label(),new Label(),new Label()};
+        // 色帯は最大6枚（3行×2列）。鱗幸など赤・緑・青・白・黄の5色凡例を表示するため4枚から拡張。
+        readonly Label[] colorLegend = {new Label(),new Label(),new Label(),new Label(),new Label(),new Label()};
         readonly System.Collections.Generic.List<Control> footerControls=new System.Collections.Generic.List<Control>();
         int legendHeight;
         int emphasisStart=-1, emphasisLength;
@@ -287,7 +288,7 @@ public MainForm(string settingsFile)
             Controls.Add(sampleNote);
             sampleColor.SetBounds(SampleNoteLeft,SampleColorTop,FormClientWidth-SampleNoteLeft-16,20); sampleColor.TextAlign=ContentAlignment.MiddleLeft; Controls.Add(sampleColor);
             // 期生色帯は見本の下・プリンター欄の上。表示時だけ footer を押し下げて重なりを防ぐ。
-            for(int n=0;n<4;n++) { colorLegend[n].SetBounds(LeftX+(n%2)*460,LegendTop+(n/2)*36,450,34); colorLegend[n].BorderStyle=BorderStyle.FixedSingle; colorLegend[n].Padding=new Padding(4,1,0,0); colorLegend[n].Visible=false; Controls.Add(colorLegend[n]); }
+            for(int n=0;n<colorLegend.Length;n++) { colorLegend[n].SetBounds(LeftX+(n%2)*460,LegendTop+(n/2)*36,450,34); colorLegend[n].BorderStyle=BorderStyle.FixedSingle; colorLegend[n].Padding=new Padding(4,1,0,0); colorLegend[n].Visible=false; Controls.Add(colorLegend[n]); }
             const int printerFieldTop = LegendTop + CaptionToField;
             Controls.Add(Caption("プリンター",LeftX,LegendTop)); Field(printers,LeftX,printerFieldTop,400);
             Controls.Add(Caption("用紙サイズ",430,LegendTop)); Field(papers,430,printerFieldTop,280);
@@ -431,8 +432,11 @@ public MainForm(string settingsFile)
             const int noteHeight = 14;
             int y = HeaderLabelTop;
             bool colorWithDept = colorDepartment.Visible && department.Visible;
+            // 上段自由入力＋色区分（鱗幸 OptionalHeading など）：色コンボは役職行
+            bool colorWithHeader = colorDepartment.Visible && header.Visible && !department.Visible && !role.Visible && roleLabel.Visible;
             bool colorAsHeader = colorDepartment.Visible && !department.Visible && !header.Visible;
             bool sizeNumber = spec.Layout == "SizeNumber";
+            bool colorInRoleRow = colorWithDept || colorWithHeader;
 
             if(headerLabel.Visible) { headerLabel.Top = y; y += CaptionToField; }
             if(department.Visible) {
@@ -452,12 +456,12 @@ public MainForm(string settingsFile)
                 if(roleLabel.Visible) { roleLabel.Top = y; y += CaptionToField; }
                 header.Top = y; EnsurePreferredHeight(header);
                 y = header.Bottom + AfterFieldGap;
-            } else if(roleLabel.Visible || role.Visible || colorWithDept) {
+            } else if(roleLabel.Visible || role.Visible || colorInRoleRow) {
                 if(roleLabel.Visible) { roleLabel.Top = y; y += CaptionToField; }
                 if(role.Visible) {
                     role.Top = y; EnsurePreferredHeight(role);
                     y = role.Bottom + AfterFieldGap;
-                } else if(colorWithDept) {
+                } else if(colorInRoleRow) {
                     colorDepartment.Top = y; EnsurePreferredHeight(colorDepartment);
                     y = colorDepartment.Bottom + AfterFieldGap;
                 } else {
@@ -625,7 +629,8 @@ public MainForm(string settingsFile)
             colorDepartment.Visible=groups.Length>0 && spec.Layout!="CohortName" && !spec.ColorFromDepartment; colorDepartment.SelectedItem=d.ColorDepartment;
             if(groups.Length>0 && spec.Layout!="CohortName" && !spec.ColorFromDepartment) {
                 string caption=spec.ColorCaption+"（ラベル色）";
-                if(departments!=null) { role.Visible=false; roleLabel.Visible=true; roleLabel.Text=caption; }
+                // OptionalHeading は上段自由入力を残し、色選択だけ役職行へ出す（鱗幸など）。
+                if(departments!=null || spec.Layout=="OptionalHeading") { role.Visible=false; roleLabel.Visible=true; roleLabel.Text=caption; }
                 else { header.Visible=false; headerLabel.Visible=true; headerLabel.Text=caption; }
             }
             if(spec.Layout=="SizeNumber") { role.Visible=false; roleLabel.Visible=true; roleLabel.Text="その他サイズ（例：10L）"; header.Visible=true; header.ReadOnly=false; header.MaxLength=5; header.Text=d.Header; }
@@ -741,7 +746,7 @@ public MainForm(string settingsFile)
                 foreach(Control control in footerControls) control.Top+=delta;
                 ClientSize=new Size(ClientSize.Width,ClientSize.Height+delta); legendHeight=targetHeight;
             }
-            for(int n=0;n<4;n++) {
+            for(int n=0;n<colorLegend.Length;n++) {
                 colorLegend[n].Visible=n<colors.Count;
                 if(n>=colors.Count) continue;
                 colorLegend[n].SetBounds(LeftX+(n%2)*(cardWidth+gap),LegendTop+(n/2)*(cardHeight+4),cardWidth,cardHeight);
