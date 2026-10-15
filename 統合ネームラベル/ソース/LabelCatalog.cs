@@ -113,7 +113,7 @@ namespace UnifiedLabels
             if(Items[kind].Layout=="DeptOnly" && Items[kind].FixedColor=="緑？")return d.Header.Replace(" ","").Replace("　","")=="鮮魚"?"緑？":"先方から指定";
             if(Items[kind].FixedColor!="") return Items[kind].FixedColor;
             string[] groups=ColorGroups(kind);
-            if(groups.Length>0) { int n=Array.IndexOf(groups,SelectedGroup(kind,d)); return n<0?"区分未選択":GroupColors(kind)[n]; }
+            if(groups.Length>0) { int n=Array.IndexOf(groups,SelectedGroup(kind,d)); return n<0?"未指定":GroupColors(kind)[n]; }
             if(kind==20 || kind==23 || kind==24) return "緑";
             return Items[kind].White?"白":"先方から指定";
         }
@@ -192,7 +192,12 @@ namespace UnifiedLabels
             if(s.Layout=="QR") return LabelRenderer.Validate(3,d);
             if(DepartmentNames(kind)!=null && String.IsNullOrWhiteSpace(d.Header)) return "部署を選択してください。";
             string[] groups=ColorGroups(kind);
-            if(groups.Length>0 && Array.IndexOf(groups,SelectedGroup(kind,d))<0) return s.Layout=="CohortName"?"期生を半角数字で入力してください。":"区分を選択してラベルの色を確認してください。";
+            // 色確認専用（性別・区分など印字に使わない Groups）は未選択でも印刷可。
+            // SizeNumber（サイズ印字）・CohortName（期生印字）・ColorFromDepartment（部署印字＋色）は従来どおり必須。
+            if(groups.Length>0 && Array.IndexOf(groups,SelectedGroup(kind,d))<0) {
+                if(s.Layout=="CohortName") return "期生を半角数字で入力してください。";
+                if(s.Layout=="SizeNumber" || s.ColorFromDepartment) return "区分を選択してラベルの色を確認してください。";
+            }
             if(s.NeedsName && String.IsNullOrWhiteSpace(d.Person)) return s.Layout=="Surname"?"苗字を入力してください。":"名前を入力してください。";
             if(s.Layout=="DeptOnly" && String.IsNullOrWhiteSpace(d.Header))return "印字する部署名を入力してください。";
             if(s.Layout=="DeptFurigana" && String.IsNullOrWhiteSpace(d.Role))return "苗字のふりがなをひらがなで入力してください。";
