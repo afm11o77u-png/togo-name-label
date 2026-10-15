@@ -428,7 +428,7 @@ namespace UnifiedLabels
                     continue;
                 }
                 string err=BatchValidation.ValidateForTask(t.Kind,t.Data.ToLabelData());
-                if(err!=null) { errors.Add("行"+row+"（"+t.CustomerName+"／"+t.Person+"）: "+err); continue; }
+                if(err!=null) { errors.Add("行"+row+"（"+t.CustomerName+"／"+t.Data.Person+"）: "+err); continue; }
                 ready.Add(t);
             }
             return ready;
@@ -463,14 +463,14 @@ namespace UnifiedLabels
                     if(recheck!=null) {
                         t.Status=BatchTaskStatus.Failed; t.LastError=recheck; t.UpdatedAt=DateTime.Now;
                         if(store!=null) store.Save();
-                        if(!Confirm("再検証エラー","タスク（"+t.Person+"）: "+recheck+"\r\nこのタスクを飛ばして続行しますか？")) {
+                        if(!Confirm("再検証エラー","タスク（"+t.Data.Person+"）: "+recheck+"\r\nこのタスクを飛ばして続行しますか？")) {
                             Cancelled=true; StopReason="再検証エラーで中断"; return;
                         }
                         continue;
                     }
                     t.Status=BatchTaskStatus.Sending; t.UpdatedAt=DateTime.Now; t.LastError="";
                     if(store!=null) store.Save();
-                    Report("送信中: "+t.CustomerName+" / "+t.Person+" ["+color+"]");
+                    Report("送信中: "+t.CustomerName+" / "+t.Data.Person+" ["+color+"]");
                     try {
                         if(!Sender.Send(t)) throw new InvalidOperationException("ジョブ送信が拒否されました");
                         t.Status=BatchTaskStatus.SentAwaitingConfirm;
