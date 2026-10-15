@@ -113,9 +113,16 @@ namespace UnifiedLabels
             if(Items[kind].Layout=="DeptOnly" && Items[kind].FixedColor=="緑？")return d.Header.Replace(" ","").Replace("　","")=="鮮魚"?"緑？":"先方から指定";
             if(Items[kind].FixedColor!="") return Items[kind].FixedColor;
             string[] groups=ColorGroups(kind);
-            if(groups.Length>0) { int n=Array.IndexOf(groups,SelectedGroup(kind,d)); return n<0?"区分未選択":GroupColors(kind)[n]; }
+            // 未選択は「未指定」（白ラベル指定とは別。Swatch は中立の白背景のみ）
+            if(groups.Length>0) { int n=Array.IndexOf(groups,SelectedGroup(kind,d)); return n<0?"未指定":GroupColors(kind)[n]; }
             if(kind==20 || kind==23 || kind==24) return "緑";
             return Items[kind].White?"白":"先方から指定";
+        }
+        /// <summary>Groups の値が印字内容にも使われるか（色確認専用なら false）。</summary>
+        public static bool ColorGroupAffectsPrint(int kind) {
+            LabelSpec s=Items[kind];
+            // SizeNumber: サイズ文字列が印字。CohortName: 期生が印字。ColorFromDepartment: 部署が印字。
+            return s.Layout=="SizeNumber" || s.Layout=="CohortName" || s.ColorFromDepartment;
         }
         public static Color Swatch(string name) { name=name.Replace("?","").Replace("？","").Trim();return name=="青"?Color.LightSkyBlue:name=="緑"?Color.LightGreen:name=="赤"?Color.LightCoral:name=="黄"?Color.LightYellow:name=="オレンジ"?Color.PeachPuff:Color.White; }
         const string R="HG丸ｺﾞｼｯｸM-PRO", P="MS PGothic";
@@ -192,7 +199,9 @@ namespace UnifiedLabels
             if(s.Layout=="QR") return LabelRenderer.Validate(3,d);
             if(DepartmentNames(kind)!=null && String.IsNullOrWhiteSpace(d.Header)) return "部署を選択してください。";
             string[] groups=ColorGroups(kind);
-            if(groups.Length>0 && Array.IndexOf(groups,SelectedGroup(kind,d))<0) return s.Layout=="CohortName"?"期生を半角数字で入力してください。":"区分を選択してラベルの色を確認してください。";
+            // 色確認専用の Groups は任意。印字に使う区分（サイズ・期生・部署連動色）だけ必須。
+            if(groups.Length>0 && ColorGroupAffectsPrint(kind) && Array.IndexOf(groups,SelectedGroup(kind,d))<0)
+                return s.Layout=="CohortName"?"期生を半角数字で入力してください。":"区分を選択してラベルの色を確認してください。";
             if(s.NeedsName && String.IsNullOrWhiteSpace(d.Person)) return s.Layout=="Surname"?"苗字を入力してください。":"名前を入力してください。";
             if(s.Layout=="DeptOnly" && String.IsNullOrWhiteSpace(d.Header))return "印字する部署名を入力してください。";
             if(s.Layout=="DeptFurigana" && String.IsNullOrWhiteSpace(d.Role))return "苗字のふりがなをひらがなで入力してください。";

@@ -1347,8 +1347,21 @@ public MainForm(string settingsFile)
             kinds.SelectedIndex=KindForRow(121); colorDepartment.SelectedIndex=0;person.Text="山田 太郎";if(LabelRenderer.Validate(active,Current())!=null || LabelCatalog.ColorName(active,Current())!="青")throw new Exception("山川牧場の記載済み男性用の検証失敗");
             kinds.SelectedIndex=KindForRow(129); if(LabelRenderer.Validate(active,Current())==null || person.Visible || number.Visible) throw new Exception("無地ガイド検証失敗");
             kinds.SelectedIndex=KindForRow(154); colorDepartment.SelectedIndex=0; person.Text="ヤマダ"; if(LabelRenderer.Validate(active,Current())==null) throw new Exception("上下氏名の区切り検証失敗"); person.Text="ヤマダ タロウ";
+            // 色確認専用区分は未選択でも印刷可。選択時は従来色。SizeNumber・必須部署は維持。
+            kinds.SelectedIndex=KindForRow(47); person.Text="山田 太郎"; colorDepartment.SelectedIndex=-1;
+            if(LabelCatalog.ColorName(active,Current())!="未指定") throw new Exception("色区分未選択の表示が未指定でない");
+            if(LabelRenderer.Validate(active,Current())!=null) throw new Exception("色確認専用未選択で印刷できない");
+            colorDepartment.SelectedIndex=0; if(LabelCatalog.ColorName(active,Current())!="緑" || LabelRenderer.Validate(active,Current())!=null) throw new Exception("色確認専用選択時の色検証失敗");
+            colorDepartment.SelectedIndex=1; if(LabelCatalog.ColorName(active,Current())!="青") throw new Exception("色確認専用の夜間色失敗");
+            kinds.SelectedIndex=KindForRow(20); number.Text="60"; colorDepartment.SelectedIndex=-1;
+            if(LabelRenderer.Validate(active,Current())==null) throw new Exception("印字用サイズ未選択を許可している");
+            colorDepartment.SelectedIndex=1; if(LabelCatalog.ColorName(active,Current())!="赤" || LabelRenderer.Validate(active,Current())!=null) throw new Exception("サイズ選択時の印刷検証失敗");
+            kinds.SelectedIndex=KindForRow(45); department.SelectedIndex=-1; colorDepartment.SelectedIndex=-1; person.Text="山田 太郎";
+            if(LabelRenderer.Validate(active,Current())==null) throw new Exception("必須部署未入力を許可している");
+            department.SelectedIndex=0; if(LabelRenderer.Validate(active,Current())!=null) throw new Exception("部署入力後も色未選択で印刷できない");
+            colorDepartment.SelectedIndex=1; if(LabelCatalog.ColorName(active,Current())!="赤") throw new Exception("性別選択時の色検証失敗");
             using(Bitmap b=new Bitmap(Width,Height)) { DrawToBitmap(b,new Rectangle(0,0,Width,Height)); b.Save(Path.Combine(folder,"window-bulk.png")); }
-            File.WriteAllText(Path.Combine(folder,"bulk-verification.txt"),"PASS: 131 customers / 227 formats; independent department and color controls; distinct color rules retain selections; numeric lengths including leading zero; cohort colors 1..12; invalid cohorts; circled numbers; fixed font overflow; optional role; blank label; specified male color; two-row surname/given name.",Encoding.UTF8);
+            File.WriteAllText(Path.Combine(folder,"bulk-verification.txt"),"PASS: 131 customers / 227 formats; independent department and color controls; distinct color rules retain selections; numeric lengths including leading zero; cohort colors 1..12; invalid cohorts; circled numbers; fixed font overflow; optional role; blank label; specified male color; two-row surname/given name; optional color-only groups; required print size/department.",Encoding.UTF8);
         }
     }
     static class Program
