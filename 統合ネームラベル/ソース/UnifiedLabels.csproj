@@ -58,6 +58,8 @@
     <Compile Include="LabelCatalog.cs" />
     <Compile Include="AdditionalCatalog.cs" />
     <Compile Include="GenericLabel.cs" />
+    <Compile Include="BatchTasks.cs" />
+    <Compile Include="BatchTaskForm.cs" />
     <None Include="App.config" />
     <None Include="packages.lock.json" />
   </ItemGroup>
