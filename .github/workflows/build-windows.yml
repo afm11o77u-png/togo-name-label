@@ -65,7 +65,8 @@ jobs:
             @{ Arg = '--verify-retained'; Folder = 'verify-retained'; Ok = 'retained-verification.txt' },
             @{ Arg = '--verify-latest';   Folder = 'verify-latest';   Ok = 'latest-verification.txt' },
             @{ Arg = '--verify-generic';  Folder = 'verify-generic';  Ok = 'generic-verification.txt' },
-            @{ Arg = '--verify-layout';   Folder = 'verify-layout';   Ok = 'verification.txt' }
+            @{ Arg = '--verify-layout';   Folder = 'verify-layout';   Ok = 'verification.txt' },
+            @{ Arg = '--verify-batch';    Folder = 'verify-batch';    Ok = 'batch-verification.txt' }
           )
           foreach ($m in $modes) {
             $out = Join-Path $env:RUNNER_TEMP $m.Folder

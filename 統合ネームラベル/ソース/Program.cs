@@ -301,8 +301,11 @@ public MainForm(string settingsFile)
             Controls.Add(garmentSummary); Controls.Add(smallPlacement); Controls.Add(largePlacement);
             guide.SetBounds(LeftX,GuideTop,FormClientWidth-24,40); guide.BackColor=Color.White; guide.BorderStyle=BorderStyle.FixedSingle; guide.Padding=new Padding(6,2,0,0); Controls.Add(guide);
             Button page = new Button {Text="用紙・方向設定"}, proof = new Button {Text="印刷プレビュー"}, print = new Button {Text="印刷"};
-            Field(page,LeftX,ButtonTop,160); Field(proof,190,ButtonTop,150); Field(print,GenericLeft,ButtonTop,GenericWidth); print.Height=36;
-            Button adjust=new Button {Text="印字位置調整"};Field(adjust,360,ButtonTop,150);offsetSummary.SetBounds(530,ButtonTop,240,36);Controls.Add(offsetSummary);adjust.Click+=delegate {Safe(OpenOffset);};
+            Button addTask = new Button {Text="タスクに追加"}, openTasks = new Button {Text="タスク一覧"};
+            Field(page,LeftX,ButtonTop,150); Field(proof,172,ButtonTop,130); Field(print,680,ButtonTop,100); print.Height=36;
+            Field(addTask,790,ButtonTop,150); addTask.Height=36;
+            Button adjust=new Button {Text="印字位置調整"};Field(adjust,310,ButtonTop,130);offsetSummary.SetBounds(450,ButtonTop,120,36);Controls.Add(offsetSummary);adjust.Click+=delegate {Safe(OpenOffset);};
+            Field(openTasks,580,ButtonTop,90);
             status.SetBounds(LeftX,StatusTop,FormClientWidth-24,36); Controls.Add(status);
             // 色帯自体は押し下げ対象外（LegendTop に固定し、プリンター以降だけ動かす）
             foreach(Control control in Controls) {
@@ -381,6 +384,8 @@ public MainForm(string settingsFile)
             page.Click += delegate { Safe(delegate { using(PageSetupDialog dlg = new PageSetupDialog {Document=document,EnableMetric=true}) { dlg.ShowDialog(this); SyncPrinter(); } }); };
             proof.Click += delegate { if(Check()) Safe(delegate { using(PrintPreviewDialog dlg = new PrintPreviewDialog {Document=document,Width=1050,Height=760}) dlg.ShowDialog(this); }); };
             print.Click += delegate { if(Check()) Safe(delegate { print.Enabled=false; try { document.PrinterSettings.Copies=(short)copies.Value; document.Print(); status.Text="印刷データをプリンターへ送信しました。"; } finally { print.Enabled=true; } }); };
+            addTask.Click += delegate { Safe(AddCurrentToBatchTasks); };
+            openTasks.Click += delegate { Safe(OpenBatchTasks); };
             document.PrintPage += PrintPage;
             // 既に SelectedIndex==0 だと SelectedIndexChanged が飛ばず SwitchKind 未実行のまま起動することがある
             kinds.SelectedIndex=0;
@@ -885,6 +890,62 @@ public MainForm(string settingsFile)
             if(error!=null) { MessageBox.Show(this,error,"入力の確認",MessageBoxButtons.OK,MessageBoxIcon.Information); return false; }
             document.DocumentName="ネームラベル - "+LabelCatalog.Customers[LabelCatalog.Items[active].Customer]+" - "+LabelCatalog.Items[active].Format; return true;
         }
+        /// <summary>通常印刷と同じ画面内容をタスクへ。色確認用区分はタスクでは必須。</summary>
+        void AddCurrentToBatchTasks()
+        {
+            if(active<0) { MessageBox.Show(this,"ラベル形式を選んでください。","タスクに追加"); return; }
+            LabelData data=Current();
+            string error=BatchValidation.ValidateForTask(active,data);
+            if(error!=null) { MessageBox.Show(this,error,"タスク登録の入力確認",MessageBoxButtons.OK,MessageBoxIcon.Information); return; }
+            BatchTask task=CreateBatchTaskFromUi(active,data);
+            BatchTaskStore store=new BatchTaskStore(BatchTaskStore.DefaultPath());
+            store.Add(task);
+            status.Text="タスクに追加しました（"+task.CustomerName+"／"+task.Data.Person+"／色:"+task.ColorGroup+"）";
+            if(MessageBox.Show(this,"タスクに追加しました。タスク一覧を開きますか？","タスクに追加",MessageBoxButtons.YesNo,MessageBoxIcon.Information)==DialogResult.Yes)
+                OpenBatchTasks();
+        }
+        void OpenBatchTasks()
+        {
+            BatchTaskStore store=new BatchTaskStore(BatchTaskStore.DefaultPath());
+            using(BatchTaskForm dlg=new BatchTaskForm(store,EnrichBatchTaskFromUi,new PrintDocumentBatchJobSender()))
+                dlg.ShowDialog(this);
+            UpdatePreview();
+        }
+        BatchTask CreateBatchTaskFromUi(int kind, LabelData data)
+        {
+            LabelSpec spec=LabelCatalog.Items[kind];
+            PaperSize paper=document.DefaultPageSettings.PaperSize;
+            PrintOffset offset=CurrentOffset();
+            return new BatchTask {
+                Kind=kind,
+                CustomerName=LabelCatalog.Customers[spec.Customer],
+                FormatName=spec.Format,
+                Small=spec.Small,
+                Data=LabelDataSnapshot.From(data),
+                PrinterName=document.PrinterSettings.PrinterName??"",
+                PaperName=paper!=null?paper.PaperName:"",
+                PaperWidth=paper!=null?paper.Width:0,
+                PaperHeight=paper!=null?paper.Height:0,
+                Landscape=document.DefaultPageSettings.Landscape,
+                OffsetX=offset.X, OffsetY=offset.Y,
+                Copies=(short)copies.Value,
+                ColorGroup=BatchValidation.IssueColorGroup(kind,data),
+                Status=BatchTaskStatus.Pending
+            };
+        }
+        BatchTask EnrichBatchTaskFromUi(BatchTask task)
+        {
+            // 取込時に現在のプリンタ／用紙／オフセットを付与（印字内容・形式はタスク側を維持）
+            PaperSize paper=document.DefaultPageSettings.PaperSize;
+            PrintOffset offset=CurrentOffset();
+            task.PrinterName=document.PrinterSettings.PrinterName??"";
+            task.PaperName=paper!=null?paper.PaperName:"";
+            task.PaperWidth=paper!=null?paper.Width:0;
+            task.PaperHeight=paper!=null?paper.Height:0;
+            task.Landscape=document.DefaultPageSettings.Landscape;
+            task.OffsetX=offset.X; task.OffsetY=offset.Y;
+            return task;
+        }
         void PrintPage(object sender, PrintPageEventArgs e)
         {
             GraphicsState state=e.Graphics.Save();
@@ -1383,6 +1444,10 @@ public MainForm(string settingsFile)
                 string settings=args.Length==2 && args[0].StartsWith("--verify")?Path.Combine(Path.GetFullPath(args[1]),"test-settings.xml"):Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"UnifiedNameLabels","settings.xml");
                 if(args.Length==2 && args[0]=="--verify-generic") {
                     using(GenericLabelForm generic=new GenericLabelForm(new UserSettings(settings))) generic.Verify(args[1]);
+                    return 0;
+                }
+                if(args.Length==2 && args[0]=="--verify-batch") {
+                    BatchVerification.Run(args[1]);
                     return 0;
                 }
                 using(MainForm form=new MainForm(settings)) {
