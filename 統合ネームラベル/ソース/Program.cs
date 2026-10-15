@@ -302,8 +302,10 @@ public MainForm(string settingsFile)
             guide.SetBounds(LeftX,GuideTop,FormClientWidth-24,40); guide.BackColor=Color.White; guide.BorderStyle=BorderStyle.FixedSingle; guide.Padding=new Padding(6,2,0,0); Controls.Add(guide);
             Button page = new Button {Text="用紙・方向設定"}, proof = new Button {Text="印刷プレビュー"}, print = new Button {Text="印刷"};
             Button addTask = new Button {Text="タスクに追加"}, openTasks = new Button {Text="タスク一覧"};
-            Field(page,LeftX,ButtonTop,150); Field(proof,172,ButtonTop,130); Field(print,680,ButtonTop,100); print.Height=36;
-            Field(addTask,790,ButtonTop,150); addTask.Height=36;
+            // 右下：印刷。その左隣：タスクに追加（余白10・右端940は従来どおり）。AnchorはTop|Leftのまま（footerのTop押し下げと両立）。
+            Field(page,LeftX,ButtonTop,150); Field(proof,172,ButtonTop,130);
+            Field(addTask,680,ButtonTop,150); addTask.Height=36;
+            Field(print,840,ButtonTop,100); print.Height=36;
             Button adjust=new Button {Text="印字位置調整"};Field(adjust,310,ButtonTop,130);offsetSummary.SetBounds(450,ButtonTop,120,36);Controls.Add(offsetSummary);adjust.Click+=delegate {Safe(OpenOffset);};
             Field(openTasks,580,ButtonTop,90);
             status.SetBounds(LeftX,StatusTop,FormClientWidth-24,36); Controls.Add(status);
