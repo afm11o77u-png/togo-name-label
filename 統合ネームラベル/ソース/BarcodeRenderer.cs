@@ -28,7 +28,8 @@ namespace UnifiedLabels
         }
 
         /// <summary>レガシー形式 kind 0〜3 のバーコードを、従来どおりの位置・大きさで描画する。</summary>
-        public static void DrawForLabel(Graphics g, int kind, string number)
+        /// <param name="umiosQrLeft">kind=3（Umios 大ネームQR）の描画 X。未指定時は 15（従来）。社員番号中心合わせ時は呼び出し側で算出。</param>
+        public static void DrawForLabel(Graphics g, int kind, string number, float umiosQrLeft = 15f)
         {
             if (String.IsNullOrWhiteSpace(number)) return;
             if (kind == 2)
@@ -41,7 +42,7 @@ namespace UnifiedLabels
             if (kind == 3)
             {
                 using (Bitmap bmp = CreateQr(number, 60, 60))
-                    g.DrawImage(bmp, 15, 100, 60, 60);
+                    g.DrawImage(bmp, umiosQrLeft, 100, 60, 60);
                 return;
             }
             if (kind == 0 || kind == 1)
