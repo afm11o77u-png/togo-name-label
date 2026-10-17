@@ -92,8 +92,16 @@ namespace UnifiedLabels
             if (kind == 0) Text(g, d.Number, "Bahnschrift", LabelCatalog.PickFont(d.Digits==5?7:8, d.NumberFontSet, d.NumberFontPt), 154, 80);
             if (kind == 1) Text(g, d.Number, gothic, LabelCatalog.PickFont(d.Digits==5?9:10, d.NumberFontSet, d.NumberFontPt), 254, 160);
             if (kind == 2) Text(g, d.Number, gothic, LabelCatalog.PickFont(10, d.NumberFontSet, d.NumberFontPt), 110, 160);
-            // Umios 札幌（kind=3）／十勝（Layout=QR→Draw(g,3)）: QR(15,100)-(75,160) 直下に社員番号。QR・部署・役職・氏名は未変更。
-            if (kind == 3) Text(g, d.Number, gothic, LabelCatalog.PickFont(11, d.NumberFontSet, d.NumberFontPt), 7, 160);
+            // Umios 札幌（kind=3）／十勝（Layout=QR→Draw(g,3)）:
+            // QR は (15,100) 60×60。社員番号は QR 左端揃え・下端直下（重ならない）。
+            // GenericTypographic で DrawString 余白を抑え、旧 Form1 の左右・上下バランスに合わせる。
+            // 部署・役職・氏名・QR 位置は変更しない。
+            if (kind == 3)
+            {
+                float numberPt = LabelCatalog.PickFont(11, d.NumberFontSet, d.NumberFontPt);
+                using (Font font = new Font(gothic, numberPt * 100f / 72f, FontStyle.Bold, GraphicsUnit.Pixel))
+                    g.DrawString(d.Number, font, Brushes.Black, 15, 160, StringFormat.GenericTypographic);
+            }
             if (String.IsNullOrWhiteSpace(d.Number)) return;
             // QR / Code39 は BarcodeRenderer（ZXing.Net）へ集約。配置・大きさは従来どおり。
             BarcodeRenderer.DrawForLabel(g, kind, d.Number);
