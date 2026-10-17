@@ -389,7 +389,8 @@ namespace UnifiedLabels
             LabelSpec s=Items[kind]; Size mm=Millimetres(kind); string name=NameForPrint(s,d.Person);
             if(s.Pending!="") { Line(g,"仕様確認中",P,Mm(1,1,mm.Width-2,mm.Height-2),16); return; }
             if(s.Layout=="Blank") return;
-            if(s.Layout=="QR") { LabelRenderer.Draw(g,3,d); return; }
+            // Umios十勝など Layout=QR。札幌 Legacy(kind=3) の数字 Y=160 変更を共有せず旧 Y=150 を維持。
+            if(s.Layout=="QR") { LabelRenderer.Draw(g,3,d,150f); return; }
             if(s.Layout=="MixedName") {
                 float emph=PickFont(42,d.PersonFontSet,d.PersonFontPt);
                 float normal=PickFont(24,d.PersonFontSet,d.PersonFontSet?d.PersonFontPt*24f/42f:24);
