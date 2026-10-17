@@ -93,18 +93,27 @@ namespace UnifiedLabels
             if (kind == 1) Text(g, d.Number, gothic, LabelCatalog.PickFont(d.Digits==5?9:10, d.NumberFontSet, d.NumberFontPt), 254, 160);
             if (kind == 2) Text(g, d.Number, gothic, LabelCatalog.PickFont(10, d.NumberFontSet, d.NumberFontPt), 110, 160);
             // Umios 札幌（kind=3）／十勝（Layout=QR→Draw(g,3)）:
-            // QR は (15,100) 60×60。社員番号は QR 左端揃え・下端直下（重ならない）。
-            // GenericTypographic で DrawString 余白を抑え、旧 Form1 の左右・上下バランスに合わせる。
-            // 部署・役職・氏名・QR 位置は変更しない。
+            // 社員番号は従来どおり X=15・Y=160（動かさない）。QR 60×60 の横中央を数字の横中央
+            // （6桁なら 3桁目と4桁目の間）に合わせるため、QR だけ左へずらす。部署・役職・氏名は未変更。
+            float umiosQrLeft = 15f;
             if (kind == 3)
             {
+                const float numberX = 15f;
+                const float qrSize = 60f;
                 float numberPt = LabelCatalog.PickFont(11, d.NumberFontSet, d.NumberFontPt);
                 using (Font font = new Font(gothic, numberPt * 100f / 72f, FontStyle.Bold, GraphicsUnit.Pixel))
-                    g.DrawString(d.Number, font, Brushes.Black, 15, 160, StringFormat.GenericTypographic);
+                {
+                    g.DrawString(d.Number, font, Brushes.Black, numberX, 160, StringFormat.GenericTypographic);
+                    if (!String.IsNullOrWhiteSpace(d.Number))
+                    {
+                        float numberW = g.MeasureString(d.Number, font, int.MaxValue, StringFormat.GenericTypographic).Width;
+                        umiosQrLeft = numberX + numberW / 2f - qrSize / 2f;
+                    }
+                }
             }
             if (String.IsNullOrWhiteSpace(d.Number)) return;
-            // QR / Code39 は BarcodeRenderer（ZXing.Net）へ集約。配置・大きさは従来どおり。
-            BarcodeRenderer.DrawForLabel(g, kind, d.Number);
+            // QR / Code39 は BarcodeRenderer（ZXing.Net）へ集約。kind=3 は上で算出した umiosQrLeft を使う。
+            BarcodeRenderer.DrawForLabel(g, kind, d.Number, umiosQrLeft);
         }
     }
 

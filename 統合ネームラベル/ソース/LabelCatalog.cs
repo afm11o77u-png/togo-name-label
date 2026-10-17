@@ -389,7 +389,7 @@ namespace UnifiedLabels
             LabelSpec s=Items[kind]; Size mm=Millimetres(kind); string name=NameForPrint(s,d.Person);
             if(s.Pending!="") { Line(g,"仕様確認中",P,Mm(1,1,mm.Width-2,mm.Height-2),16); return; }
             if(s.Layout=="Blank") return;
-            // Umios十勝 Layout=QR → kind=3 描画（札幌と同座標：QR左端・下端直下の社員番号）。部署・役職・氏名・QR位置は kind=3 既存のまま。
+            // Umios十勝 Layout=QR → kind=3 描画（札幌と同経路：数字X維持・QR横中央＝数字横中央）。部署・役職・氏名は kind=3 既存のまま。
             if(s.Layout=="QR") { LabelRenderer.Draw(g,3,d); return; }
             if(s.Layout=="MixedName") {
                 float emph=PickFont(42,d.PersonFontSet,d.PersonFontPt);
