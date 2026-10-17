@@ -45,11 +45,7 @@ namespace UnifiedLabels
             }
             return null;
         }
-        /// <param name="umiosQrNumberY">
-        /// kind==3（Umios札幌 Legacy）の社員番号 Y。null なら札幌用 160（QR下端直下）。
-        /// Layout=QR（Umios十勝など）から呼ぶときは旧座標 150 を渡して札幌変更を共有しない。
-        /// </param>
-        public static void Draw(Graphics g, int kind, LabelData d, float? umiosQrNumberY = null)
+        public static void Draw(Graphics g, int kind, LabelData d)
         {
             if(kind>=4) { LabelCatalog.Draw(g,kind,d); return; }
             string rounded = "HG丸ｺﾞｼｯｸM-PRO", gothic = "MS PGothic";
@@ -96,8 +92,8 @@ namespace UnifiedLabels
             if (kind == 0) Text(g, d.Number, "Bahnschrift", LabelCatalog.PickFont(d.Digits==5?7:8, d.NumberFontSet, d.NumberFontPt), 154, 80);
             if (kind == 1) Text(g, d.Number, gothic, LabelCatalog.PickFont(d.Digits==5?9:10, d.NumberFontSet, d.NumberFontPt), 254, 160);
             if (kind == 2) Text(g, d.Number, gothic, LabelCatalog.PickFont(10, d.NumberFontSet, d.NumberFontPt), 110, 160);
-            // Umios 札幌（kind=3 直呼び）のみ QR 下端直下 Y=160。十勝 Layout=QR は 150 を明示渡し。
-            if (kind == 3) Text(g, d.Number, gothic, LabelCatalog.PickFont(11, d.NumberFontSet, d.NumberFontPt), 7, umiosQrNumberY ?? 160f);
+            // Umios 札幌（kind=3）／十勝（Layout=QR→Draw(g,3)）: QR(15,100)-(75,160) 直下に社員番号。QR・部署・役職・氏名は未変更。
+            if (kind == 3) Text(g, d.Number, gothic, LabelCatalog.PickFont(11, d.NumberFontSet, d.NumberFontPt), 7, 160);
             if (String.IsNullOrWhiteSpace(d.Number)) return;
             // QR / Code39 は BarcodeRenderer（ZXing.Net）へ集約。配置・大きさは従来どおり。
             BarcodeRenderer.DrawForLabel(g, kind, d.Number);
