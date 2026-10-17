@@ -92,7 +92,8 @@ namespace UnifiedLabels
             if (kind == 0) Text(g, d.Number, "Bahnschrift", LabelCatalog.PickFont(d.Digits==5?7:8, d.NumberFontSet, d.NumberFontPt), 154, 80);
             if (kind == 1) Text(g, d.Number, gothic, LabelCatalog.PickFont(d.Digits==5?9:10, d.NumberFontSet, d.NumberFontPt), 254, 160);
             if (kind == 2) Text(g, d.Number, gothic, LabelCatalog.PickFont(10, d.NumberFontSet, d.NumberFontPt), 110, 160);
-            if (kind == 3) Text(g, d.Number, gothic, LabelCatalog.PickFont(11, d.NumberFontSet, d.NumberFontPt), 7, 150);
+            // Umios 大ネーム（QR）: QR は (15,100)-(75,160)。旧どおり QR 直下に6桁（だるま Code39 下数字と同じ Y=160）。
+            if (kind == 3) Text(g, d.Number, gothic, LabelCatalog.PickFont(11, d.NumberFontSet, d.NumberFontPt), 7, 160);
             if (String.IsNullOrWhiteSpace(d.Number)) return;
             // QR / Code39 は BarcodeRenderer（ZXing.Net）へ集約。配置・大きさは従来どおり。
             BarcodeRenderer.DrawForLabel(g, kind, d.Number);
