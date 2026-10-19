@@ -208,7 +208,10 @@ namespace UnifiedLabels {
 {"ホクレン鶏卵流通センター札幌","ほくれんけいらんりゅうつうせんたーさっぽろ"},
 {"ホクレン鶏卵流通センター旭川","ほくれんけいらんりゅうつうせんたーあさひかわ"},
 {"札幌健診センター","さっぽろけんしんせんたー"},
-{"札幌中一","さっぽろなかいち"}
+{"札幌中一","さっぽろなかいち"},
+{"エア・ウォーター・アグリ 更別工場/札幌工場","えあうぉーたーあぐりせつべつこうじょうさっぽろこうじょう"},
+{"十勝ミートセンター","とかちみーとせんたー"},
+{"ベル・クール研究所","べるくーるけんきゅうじょ"}
   };
   public static string CustomerReading(string name){string reading;return CustomerReadings.TryGetValue(name,out reading)?reading:name;}
   public static string[] SortedCustomers(){var names=(string[])Customers.Clone();var comparer=CultureInfo.GetCultureInfo("ja-JP").CompareInfo;Array.Sort(names,delegate(string a,string b){int n=comparer.Compare(CustomerReading(a),CustomerReading(b),CompareOptions.IgnoreWidth|CompareOptions.IgnoreKanaType);return n!=0?n:comparer.Compare(a,b);});return names;}

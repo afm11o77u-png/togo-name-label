@@ -85,7 +85,7 @@ namespace UnifiedLabels {
    Need(LabelCatalog.Items[0].NeedsNumber && LabelCatalog.Items[1].NeedsNumber && LabelCatalog.Items[2].NeedsNumber && LabelCatalog.Items[3].NeedsNumber,"Legacy codes hidden");
    kinds.SelectedIndex=0;digits.SelectedIndex=1;number.Text="Y12345";digits.SelectedIndex=0;Need(number.Text=="Y1234","Yotsuba 5 to 4 truncation");
    Need(preferences.Get(OffsetKey).X==0,"Unexpected test adjustment");
-   File.WriteAllText(Path.Combine(folder,"latest-verification.txt"),"PASS: 131 customers / 227 formats; provisional colors and question marks; customer-specified unknown color; department color linkage; 3-line furigana; variable stars; Roman names; split alphanumeric codes; fixed TotepPo; Sapporo/Asahikawa cohort cycles 1..12; halfwidth katakana; incomplete templates blocked; existing QR inputs; no print jobs sent.",Encoding.UTF8);Hide();
+   File.WriteAllText(Path.Combine(folder,"latest-verification.txt"),"PASS: 134 customers / 233 formats; provisional colors and question marks; customer-specified unknown color; department color linkage; 3-line furigana; variable stars; Roman names; split alphanumeric codes; fixed TotepPo; Sapporo/Asahikawa cohort cycles 1..12; halfwidth katakana; incomplete templates blocked; existing QR inputs; no print jobs sent.",Encoding.UTF8);Hide();
   }
  }
 }
