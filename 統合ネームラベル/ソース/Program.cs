@@ -1411,7 +1411,7 @@ public MainForm(string settingsFile)
             Hide(); File.WriteAllText(Path.Combine(folder,"verification.txt"),"PASS: long placement wraps without overlap; color and cohort guides; fixed-font notice; changing formats restores original window height. No print job sent.",Encoding.UTF8);
         }
         void VerifyBulkAdditions(string folder) {
-            if(LabelCatalog.Items.Length!=227 || LabelCatalog.Customers.Length!=131) throw new Exception("登録件数不一致");
+            if(LabelCatalog.Items.Length!=233 || LabelCatalog.Customers.Length!=134) throw new Exception("登録件数不一致");
             foreach(int row in new int[]{45,46,74,108+1,132+1}) {
                 kinds.SelectedIndex=KindForRow(row); department.SelectedIndex=0;
                 if(LabelCatalog.ColorGroups(active).Length>0) { colorDepartment.SelectedIndex=1; if(colorDepartment.Bounds.IntersectsWith(department.Bounds)) throw new Exception("部署と色の入力欄が重なっています"); }
@@ -1447,7 +1447,7 @@ public MainForm(string settingsFile)
             department.SelectedIndex=0; if(LabelRenderer.Validate(active,Current())!=null) throw new Exception("部署入力後も色未選択で印刷できない");
             colorDepartment.SelectedIndex=1; if(LabelCatalog.ColorName(active,Current())!="赤") throw new Exception("性別選択時の色検証失敗");
             using(Bitmap b=new Bitmap(Width,Height)) { DrawToBitmap(b,new Rectangle(0,0,Width,Height)); b.Save(Path.Combine(folder,"window-bulk.png")); }
-            File.WriteAllText(Path.Combine(folder,"bulk-verification.txt"),"PASS: 131 customers / 227 formats; independent department and color controls; distinct color rules retain selections; numeric lengths including leading zero; cohort colors 1..12; invalid cohorts; circled numbers; fixed font overflow; optional role; blank label; specified male color; two-row surname/given name; optional color-only groups; required print size/department.",Encoding.UTF8);
+            File.WriteAllText(Path.Combine(folder,"bulk-verification.txt"),"PASS: 134 customers / 233 formats; independent department and color controls; distinct color rules retain selections; numeric lengths including leading zero; cohort colors 1..12; invalid cohorts; circled numbers; fixed font overflow; optional role; blank label; specified male color; two-row surname/given name; optional color-only groups; required print size/department.",Encoding.UTF8);
         }
     }
     static class Program
