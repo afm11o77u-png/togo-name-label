@@ -354,9 +354,13 @@ public MainForm(string settingsFile)
                 try {
                     string typed=customers.Text; int caret=customers.SelectionStart;
                     selecting=true;
+                    // DroppedDown=true（および開いたままの候補更新）は、入力で隠れたマウス矢印の
+                    // 状態をドロップダウンに固定する WinForms 既知問題がある。
+                    // 当該 TextUpdate の末尾で Current を1回戻す（ShowCursor の反復はしない）。
                     if(!customers.DroppedDown) customers.DroppedDown=true;
                     customers.Text=typed;
                     if(caret>=0 && caret<=typed.Length) customers.SelectionStart=caret;
+                    Cursor.Current=Cursors.Default;
                 } catch { } finally { selecting=false; }
             };
             // Enter をダイアログキーにせず受け取り、先頭候補を確定（フォーカス維持）
@@ -1133,6 +1137,21 @@ public MainForm(string settingsFile)
             int narrowed=customers.Items.Count;customers.Text="よつ";FillCustomerItems("よつ");
             if(customers.Items.Count<narrowed)throw new Exception("メイン顧客欄の入力中絞り込み失敗");
             FillCustomerItems("");if(customers.Items.Count!=LabelCatalog.Customers.Length)throw new Exception("メイン顧客欄の全件復帰失敗");
+            // TextUpdate 相当: 絞り込み→DroppedDown→文字/キャレット復元→Cursor.Current（矢印復帰の最小対策）
+            // 実画面のポインター見え方はここでは検証しない（ヘッドレス／CI 制約）。
+            customers.Text="コープフーズ";FillCustomerItems("コープフーズ");
+            if(customers.Items.Count<1)throw new Exception("コープフーズ絞り込み失敗");
+            string coopTyped=customers.Text; int coopCaret=customers.SelectionStart;
+            try {
+                if(!customers.DroppedDown) customers.DroppedDown=true;
+                customers.Text=coopTyped;
+                if(coopCaret>=0 && coopCaret<=coopTyped.Length) customers.SelectionStart=coopCaret;
+                Cursor.Current=Cursors.Default;
+            } catch(Exception ex) { throw new Exception("顧客候補の自動展開パス失敗: "+ex.Message); }
+            if(customers.Text!="コープフーズ")throw new Exception("自動展開後に入力文字が変わった "+customers.Text);
+            if(customers.Items.Count<1)throw new Exception("自動展開後に候補が消えた");
+            try { if(customers.DroppedDown) customers.DroppedDown=false; } catch { }
+            FillCustomerItems("");
             // 別顧客へ移してから Enter 先頭確定し、内容切替（active）まで進むこと
             SelectedCustomerIndex=1; Application.DoEvents();
             if(LabelCatalog.Items[active].Customer==topCustomer)throw new Exception("Enter検証の前提（別顧客）にできない");
