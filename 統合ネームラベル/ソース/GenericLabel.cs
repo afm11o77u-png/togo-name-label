@@ -829,7 +829,13 @@ namespace UnifiedLabels
             ApplyDraftToControls();
             UpdateFormatVisibility();
             if (formatBox.SelectedIndex != 1) throw new Exception("左右番号の印字形式選択が反映されていません");
-            if (!splitPanel.Visible || sizeBox.Visible) throw new Exception("左右番号時の入力パネル表示が不正です");
+            // Form 未表示（--verify-generic / CI）では Control.Visible が祖先非表示で常に false になるため、
+            // Visible ではなく切替結果（形式・ガイド文言）で入力パネル表示を確認する。
+            if (draft.Format != GenericLabelFormat.SplitNumber)
+                throw new Exception("左右番号時の入力形式が不正です");
+            if (guide.Text == null || guide.Text.IndexOf("左右番号", StringComparison.Ordinal) < 0
+                || guide.Text.IndexOf("管理番号", StringComparison.Ordinal) < 0 && guide.Text.IndexOf("切り分け目安", StringComparison.Ordinal) < 0)
+                throw new Exception("左右番号時の入力パネル表示が不正です");
             if (GenericLabelRenderer.Validate(draft) != null)
                 throw new Exception("左右番号の標準サンプルが不正: " + GenericLabelRenderer.Validate(draft));
             draft.Number = "番号!";
