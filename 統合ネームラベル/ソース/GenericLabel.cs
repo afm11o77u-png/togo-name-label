@@ -8,9 +8,19 @@ using System.Windows.Forms;
 
 namespace UnifiedLabels
 {
+    /// <summary>汎用ラベルの印字形式。顧客カタログ／一括発行の Layout とは独立。</summary>
+    public enum GenericLabelFormat
+    {
+        /// <summary>既存の段組自由入力。</summary>
+        Rows = 0,
+        /// <summary>小ネーム左右に同じ管理番号（顧客 SplitNumber と同座標）。</summary>
+        SplitNumber = 1
+    }
+
     /// <summary>自由入力の汎用ラベル（顧客別仕様とは独立）。</summary>
     public sealed class GenericLabelData
     {
+        public GenericLabelFormat Format = GenericLabelFormat.Rows;
         public bool Small = true;
         public string Family = "HG丸ｺﾞｼｯｸM-PRO";
         public int Rows = 1;
@@ -20,10 +30,22 @@ namespace UnifiedLabels
         public readonly float[] OffsetXMm = new float[] { 0f, 0f, 0f };
         /// <summary>段内の上下オフセット(mm)。0＝縦中央。正で下へ。</summary>
         public readonly float[] OffsetYMm = new float[] { 0f, 0f, 0f };
+        /// <summary>左右番号形式の管理番号（数字・英字・ハイフン）。</summary>
+        public string Number = "";
+        /// <summary>左右番号の上限pt。初期は顧客 SplitNumber と同じ 36。</summary>
+        public float NumberSize = 36f;
 
         public GenericLabelData Clone()
         {
-            GenericLabelData c = new GenericLabelData { Small = Small, Family = Family, Rows = Rows };
+            GenericLabelData c = new GenericLabelData
+            {
+                Format = Format,
+                Small = Small,
+                Family = Family,
+                Rows = Rows,
+                Number = Number,
+                NumberSize = NumberSize
+            };
             for (int i = 0; i < 3; i++)
             {
                 c.Texts[i] = Texts[i];
@@ -38,6 +60,9 @@ namespace UnifiedLabels
     public static class GenericLabelRenderer
     {
         public const string SettingsIdentity = "汎用ラベル";
+        public const string SplitNumberFamily = "MS PGothic";
+        /// <summary>顧客 SplitNumber の MaximumFont 既定と同じ。</summary>
+        public const float SplitNumberDefaultPt = 36f;
         const float MarginMm = 1f;
         /// <summary>段内位置の調整上限(mm)。帯／枠内に収まる範囲でさらに検証する。</summary>
         public const float MaxRowOffsetMm = 20f;
@@ -47,9 +72,28 @@ namespace UnifiedLabels
         public static float DefaultSizePt(bool small) { return small ? 26f : 48f; }
         public static string FamilyName(string display) { return display == "MS Pゴシック" ? "MS PGothic" : "HG丸ｺﾞｼｯｸM-PRO"; }
         public static string FamilyDisplay(string family) { return family == "MS PGothic" ? "MS Pゴシック" : "丸ゴシック"; }
+        public static bool IsSplitNumber(GenericLabelData d) { return d != null && d.Format == GenericLabelFormat.SplitNumber; }
         public static string OffsetKey(string printer, bool small)
         {
-            return printer + "|" + SettingsIdentity + "|" + (small ? "小" : "大");
+            return OffsetKey(printer, small, GenericLabelFormat.Rows);
+        }
+        public static string OffsetKey(string printer, bool small, GenericLabelFormat format)
+        {
+            string key = printer + "|" + SettingsIdentity + "|" + (small ? "小" : "大");
+            if (format == GenericLabelFormat.SplitNumber) key += "|左右番号";
+            return key;
+        }
+        static string SplitNumberText(GenericLabelData d)
+        {
+            return (d.Number ?? "").Replace('　', ' ').Trim();
+        }
+        /// <summary>半角の数字・英字・ハイフンのみ。</summary>
+        public static bool IsAllowedSplitNumberChar(char c)
+        {
+            return (c >= '0' && c <= '9')
+                || (c >= 'A' && c <= 'Z')
+                || (c >= 'a' && c <= 'z')
+                || c == '-';
         }
         static RectangleF Mm(float x, float y, float w, float h)
         {
@@ -87,9 +131,22 @@ namespace UnifiedLabels
             return LabelCatalog.Fit(g, text, d.Family, BandArea(d.Small, d.Rows, index), d.Sizes[index]);
         }
 
-        /// <summary>画面プレビュー・印刷プレビュー・印刷で共有する描画。</summary>
+        /// <summary>画面プレビュー・印刷プレビュー・印刷で共有する描画。previewGuides は中央切り分け目安のみ（実印刷しない）。</summary>
         public static void Draw(Graphics g, GenericLabelData d)
         {
+            Draw(g, d, false);
+        }
+        public static void Draw(Graphics g, GenericLabelData d, bool previewGuides)
+        {
+            if (IsSplitNumber(d))
+            {
+                string number = SplitNumberText(d);
+                float pt = d.NumberSize > 0 ? d.NumberSize : SplitNumberDefaultPt;
+                // 位置・Fit は顧客 SplitNumber と同じ DrawSplitSides。汎用のみ Bold（顧客は StyleFor のまま）。
+                LabelCatalog.DrawSplitSides(g, number, SplitNumberFamily, pt, FontStyle.Bold);
+                if (previewGuides) DrawSplitCenterGuide(g);
+                return;
+            }
             int n = Math.Max(1, Math.Min(3, d.Rows));
             using (StringFormat format = new StringFormat(StringFormat.GenericTypographic))
             {
@@ -114,8 +171,33 @@ namespace UnifiedLabels
             }
         }
 
+        /// <summary>プレビュー専用の中央切り分け目安（25mm）。印刷経路では呼ばない。</summary>
+        static void DrawSplitCenterGuide(Graphics g)
+        {
+            float x = 25f / 0.254f;
+            float y1 = 1f / 0.254f;
+            float y2 = 23f / 0.254f;
+            using (Pen pen = new Pen(Color.FromArgb(150, 160, 170), 0.9f))
+            {
+                pen.DashStyle = DashStyle.Dash;
+                g.DrawLine(pen, x, y1, x, y2);
+            }
+        }
+
         public static string Validate(GenericLabelData d)
         {
+            if (IsSplitNumber(d))
+            {
+                string number = SplitNumberText(d);
+                if (String.IsNullOrWhiteSpace(number)) return "管理番号を入力してください。";
+                foreach (char c in number)
+                    if (!IsAllowedSplitNumberChar(c))
+                        return "管理番号は半角の数字・英字・ハイフンで入力してください。";
+                if (d.NumberSize < 6f || d.NumberSize > 120f)
+                    return "文字サイズは6～120ptで指定してください。";
+                // 長い番号は DrawSplitSides→Fit で各半面へ自動縮小。空以外は通す。
+                return null;
+            }
             int n = Math.Max(1, Math.Min(3, d.Rows));
             for (int i = 0; i < n; i++)
             {
@@ -158,6 +240,7 @@ namespace UnifiedLabels
     public sealed class GenericLabelForm : Form
     {
         readonly UserSettings preferences;
+        readonly ComboBox formatBox = new ComboBox();
         readonly ComboBox sizeBox = new ComboBox(), fontBox = new ComboBox(), rowsBox = new ComboBox();
         readonly ComboBox printers = new ComboBox(), papers = new ComboBox();
         readonly TextBox[] rowTexts = { new TextBox(), new TextBox(), new TextBox() };
@@ -169,6 +252,10 @@ namespace UnifiedLabels
         readonly Label[] offsetXCaptions = { new Label(), new Label(), new Label() };
         readonly Label[] offsetYCaptions = { new Label(), new Label(), new Label() };
         readonly Panel[] rowPanels = { new Panel(), new Panel(), new Panel() };
+        readonly Label sizeCaption = new Label(), fontCaption = new Label(), rowsCaption = new Label();
+        readonly Panel splitPanel = new Panel();
+        readonly TextBox numberBox = new TextBox();
+        readonly NumericUpDown numberSize = new NumericUpDown();
         readonly NumericUpDown copies = new NumericUpDown();
         readonly PictureBox preview = new PictureBox();
         readonly Label status = new Label(), guide = new Label(), offsetSummary = new Label();
@@ -188,59 +275,93 @@ namespace UnifiedLabels
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
 
-            Controls.Add(new Label { Text = "ラベルサイズ", Left = 20, Top = 18, Width = 140, Height = 24 });
+            Controls.Add(new Label { Text = "印字形式", Left = 20, Top = 18, Width = 140, Height = 24 });
+            formatBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            formatBox.Items.AddRange(new object[] { "通常（段組）", "左右番号" });
+            formatBox.SetBounds(20, 44, 280, 30);
+            Controls.Add(formatBox);
+
+            sizeCaption.Text = "ラベルサイズ";
+            sizeCaption.SetBounds(20, 88, 140, 24);
+            Controls.Add(sizeCaption);
             sizeBox.DropDownStyle = ComboBoxStyle.DropDownList;
             sizeBox.Items.AddRange(new object[] { "大（80×50mm）", "小（50×24mm）" });
-            sizeBox.SetBounds(20, 44, 280, 30);
+            sizeBox.SetBounds(20, 114, 280, 30);
             Controls.Add(sizeBox);
 
-            Controls.Add(new Label { Text = "フォント（全体）", Left = 20, Top = 88, Width = 200, Height = 24 });
+            fontCaption.Text = "フォント（全体）";
+            fontCaption.SetBounds(20, 158, 200, 24);
+            Controls.Add(fontCaption);
             fontBox.DropDownStyle = ComboBoxStyle.DropDownList;
             fontBox.Items.AddRange(new object[] { "丸ゴシック", "MS Pゴシック" });
-            fontBox.SetBounds(20, 114, 280, 30);
+            fontBox.SetBounds(20, 184, 280, 30);
             Controls.Add(fontBox);
 
-            Controls.Add(new Label { Text = "段数", Left = 20, Top = 158, Width = 140, Height = 24 });
+            rowsCaption.Text = "段数";
+            rowsCaption.SetBounds(20, 228, 140, 24);
+            Controls.Add(rowsCaption);
             rowsBox.DropDownStyle = ComboBoxStyle.DropDownList;
             rowsBox.Items.AddRange(new object[] { "1段", "2段", "3段" });
-            rowsBox.SetBounds(20, 184, 280, 30);
+            rowsBox.SetBounds(20, 254, 280, 30);
             Controls.Add(rowsBox);
 
             for (int i = 0; i < 3; i++)
             {
-                int top = 224 + i * 96;
-                rowPanels[i].SetBounds(20, top, 350, 90);
+                int top = 294 + i * 72;
+                rowPanels[i].SetBounds(20, top, 350, 68);
                 Controls.Add(rowPanels[i]);
                 rowCaptions[i].Text = (i + 1) + "段目";
-                rowCaptions[i].SetBounds(0, 0, 80, 22);
+                rowCaptions[i].SetBounds(0, 0, 70, 20);
                 rowPanels[i].Controls.Add(rowCaptions[i]);
-                rowTexts[i].SetBounds(0, 22, 220, 28);
+                rowTexts[i].SetBounds(0, 20, 200, 26);
                 rowTexts[i].MaxLength = 80;
                 rowPanels[i].Controls.Add(rowTexts[i]);
                 sizeCaptions[i].Text = "pt";
-                sizeCaptions[i].SetBounds(230, 0, 40, 22);
+                sizeCaptions[i].SetBounds(210, 0, 30, 20);
                 rowPanels[i].Controls.Add(sizeCaptions[i]);
-                rowSizes[i].SetBounds(230, 22, 100, 28);
+                rowSizes[i].SetBounds(210, 20, 70, 26);
                 rowSizes[i].Minimum = 6;
                 rowSizes[i].Maximum = 120;
                 rowSizes[i].DecimalPlaces = 0;
                 rowSizes[i].Value = 26;
                 rowPanels[i].Controls.Add(rowSizes[i]);
 
-                offsetXCaptions[i].Text = "左右 mm";
-                offsetXCaptions[i].SetBounds(0, 54, 70, 22);
+                offsetXCaptions[i].Text = "左右";
+                offsetXCaptions[i].SetBounds(0, 48, 40, 18);
                 rowPanels[i].Controls.Add(offsetXCaptions[i]);
                 ConfigureOffsetSpinner(rowOffsetX[i]);
-                rowOffsetX[i].SetBounds(70, 52, 90, 28);
+                rowOffsetX[i].SetBounds(40, 46, 70, 26);
                 rowPanels[i].Controls.Add(rowOffsetX[i]);
 
-                offsetYCaptions[i].Text = "上下 mm";
-                offsetYCaptions[i].SetBounds(170, 54, 70, 22);
+                offsetYCaptions[i].Text = "上下";
+                offsetYCaptions[i].SetBounds(120, 48, 40, 18);
                 rowPanels[i].Controls.Add(offsetYCaptions[i]);
                 ConfigureOffsetSpinner(rowOffsetY[i]);
-                rowOffsetY[i].SetBounds(240, 52, 90, 28);
+                rowOffsetY[i].SetBounds(160, 46, 70, 26);
                 rowPanels[i].Controls.Add(rowOffsetY[i]);
             }
+
+            splitPanel.SetBounds(20, 88, 350, 120);
+            Controls.Add(splitPanel);
+            splitPanel.Controls.Add(new Label { Text = "管理番号", Left = 0, Top = 0, Width = 200, Height = 22 });
+            numberBox.SetBounds(0, 24, 220, 28);
+            numberBox.MaxLength = 40;
+            splitPanel.Controls.Add(numberBox);
+            splitPanel.Controls.Add(new Label { Text = "pt", Left = 230, Top = 0, Width = 40, Height = 22 });
+            numberSize.SetBounds(230, 24, 100, 28);
+            numberSize.Minimum = 6;
+            numberSize.Maximum = 120;
+            numberSize.DecimalPlaces = 0;
+            numberSize.Value = (decimal)GenericLabelRenderer.SplitNumberDefaultPt;
+            splitPanel.Controls.Add(numberSize);
+            splitPanel.Controls.Add(new Label
+            {
+                Text = "同じ番号を左右に印字（小50×24mm）\r\n半角の数字・英字・ハイフン可",
+                Left = 0,
+                Top = 60,
+                Width = 340,
+                Height = 44
+            });
 
             Controls.Add(new Label { Text = "ラベルの内容（拡大表示）", Left = 380, Top = 18, Width = 300, Height = 24 });
             preview.SetBounds(380, 44, 560, 300);
@@ -280,15 +401,34 @@ namespace UnifiedLabels
             status.SetBounds(380, 355, 560, 150);
             Controls.Add(status);
 
+            formatBox.SelectedIndex = 0;
             sizeBox.SelectedIndex = 1;
             fontBox.SelectedIndex = 0;
             rowsBox.SelectedIndex = 0;
             ApplyDraftToControls();
-            UpdateRowVisibility();
+            UpdateFormatVisibility();
 
+            formatBox.SelectedIndexChanged += delegate
+            {
+                if (changing) return;
+                SaveControlsToDraft();
+                if (draft.Format == GenericLabelFormat.SplitNumber)
+                {
+                    draft.Small = true;
+                    draft.Family = GenericLabelRenderer.SplitNumberFamily;
+                    if (draft.NumberSize <= 0) draft.NumberSize = GenericLabelRenderer.SplitNumberDefaultPt;
+                    changing = true;
+                    sizeBox.SelectedIndex = 1;
+                    numberSize.Value = (decimal)Math.Max(6, Math.Min(120, draft.NumberSize));
+                    changing = false;
+                    LoadPapers(true);
+                }
+                UpdateFormatVisibility();
+                UpdatePreview();
+            };
             sizeBox.SelectedIndexChanged += delegate { if (!changing) { SaveControlsToDraft(); ApplySizeDefaults(); LoadPapers(true); UpdatePreview(); } };
             fontBox.SelectedIndexChanged += delegate { if (!changing) { SaveControlsToDraft(); UpdatePreview(); } };
-            rowsBox.SelectedIndexChanged += delegate { if (!changing) { SaveControlsToDraft(); UpdateRowVisibility(); UpdatePreview(); } };
+            rowsBox.SelectedIndexChanged += delegate { if (!changing) { SaveControlsToDraft(); UpdateFormatVisibility(); UpdatePreview(); } };
             for (int i = 0; i < 3; i++)
             {
                 int index = i;
@@ -297,6 +437,8 @@ namespace UnifiedLabels
                 rowOffsetX[i].ValueChanged += delegate { if (!changing) { draft.OffsetXMm[index] = (float)rowOffsetX[index].Value; UpdatePreview(); } };
                 rowOffsetY[i].ValueChanged += delegate { if (!changing) { draft.OffsetYMm[index] = (float)rowOffsetY[index].Value; UpdatePreview(); } };
             }
+            numberBox.TextChanged += delegate { if (!changing) { draft.Number = numberBox.Text; UpdatePreview(); } };
+            numberSize.ValueChanged += delegate { if (!changing) { draft.NumberSize = (float)numberSize.Value; UpdatePreview(); } };
             printers.SelectedIndexChanged += delegate { SelectPrinter(); };
             papers.SelectedIndexChanged += delegate
             {
@@ -346,6 +488,7 @@ namespace UnifiedLabels
 
         void ApplySizeDefaults()
         {
+            if (draft.Format == GenericLabelFormat.SplitNumber) return;
             // 大/小切替時は各段の上限ptを既定（大48／小26）へ戻す。段数には依存しない。
             float pt = GenericLabelRenderer.DefaultSizePt(draft.Small);
             for (int i = 0; i < 3; i++) draft.Sizes[i] = pt;
@@ -357,6 +500,7 @@ namespace UnifiedLabels
         void ApplyDraftToControls()
         {
             changing = true;
+            formatBox.SelectedIndex = draft.Format == GenericLabelFormat.SplitNumber ? 1 : 0;
             sizeBox.SelectedIndex = draft.Small ? 1 : 0;
             fontBox.SelectedIndex = draft.Family == "MS PGothic" ? 1 : 0;
             rowsBox.SelectedIndex = Math.Max(0, Math.Min(2, draft.Rows - 1));
@@ -369,42 +513,72 @@ namespace UnifiedLabels
                 rowOffsetX[i].Value = Math.Max(rowOffsetX[i].Minimum, Math.Min(rowOffsetX[i].Maximum, ox));
                 rowOffsetY[i].Value = Math.Max(rowOffsetY[i].Minimum, Math.Min(rowOffsetY[i].Maximum, oy));
             }
+            numberBox.Text = draft.Number ?? "";
+            numberSize.Value = (decimal)Math.Max(6, Math.Min(120, draft.NumberSize > 0 ? draft.NumberSize : GenericLabelRenderer.SplitNumberDefaultPt));
             changing = false;
         }
 
         void SaveControlsToDraft()
         {
-            draft.Small = sizeBox.SelectedIndex != 0;
-            draft.Family = GenericLabelRenderer.FamilyName(fontBox.SelectedItem != null ? fontBox.SelectedItem.ToString() : "丸ゴシック");
-            draft.Rows = rowsBox.SelectedIndex + 1;
-            for (int i = 0; i < 3; i++)
+            draft.Format = formatBox.SelectedIndex == 1 ? GenericLabelFormat.SplitNumber : GenericLabelFormat.Rows;
+            if (draft.Format == GenericLabelFormat.SplitNumber)
             {
-                draft.Texts[i] = rowTexts[i].Text;
-                draft.Sizes[i] = (float)rowSizes[i].Value;
-                draft.OffsetXMm[i] = (float)rowOffsetX[i].Value;
-                draft.OffsetYMm[i] = (float)rowOffsetY[i].Value;
+                draft.Small = true;
+                draft.Family = GenericLabelRenderer.SplitNumberFamily;
+                draft.Number = numberBox.Text;
+                draft.NumberSize = (float)numberSize.Value;
+            }
+            else
+            {
+                draft.Small = sizeBox.SelectedIndex != 0;
+                draft.Family = GenericLabelRenderer.FamilyName(fontBox.SelectedItem != null ? fontBox.SelectedItem.ToString() : "丸ゴシック");
+                draft.Rows = rowsBox.SelectedIndex + 1;
+                for (int i = 0; i < 3; i++)
+                {
+                    draft.Texts[i] = rowTexts[i].Text;
+                    draft.Sizes[i] = (float)rowSizes[i].Value;
+                    draft.OffsetXMm[i] = (float)rowOffsetX[i].Value;
+                    draft.OffsetYMm[i] = (float)rowOffsetY[i].Value;
+                }
             }
             document.DefaultPageSettings.Landscape = false;
         }
 
-        void UpdateRowVisibility()
+        void UpdateFormatVisibility()
         {
+            bool split = draft.Format == GenericLabelFormat.SplitNumber;
+            splitPanel.Visible = split;
+            sizeCaption.Visible = !split;
+            sizeBox.Visible = !split;
+            fontCaption.Visible = !split;
+            fontBox.Visible = !split;
+            rowsCaption.Visible = !split;
+            rowsBox.Visible = !split;
             int n = rowsBox.SelectedIndex + 1;
-            for (int i = 0; i < 3; i++) rowPanels[i].Visible = i < n;
-            float band = GenericLabelRenderer.BandHeightMm(draft.Small, n);
-            string bandNote = n == 1
-                ? ("1段＝高さ全体 " + band.ToString("0.###") + "mm")
-                : (n + "段＝各 " + band.ToString("0.###") + "mm（等分）");
-            guide.Text = (draft.Small
-                ? "サイズ：小（幅50mm・カット長24mm）　｜　"
-                : "サイズ：大（幅50mm・カット長80mm／表示は80×50mm）　｜　")
-                + bandNote + "　｜　左右・上下 0＝段の中央　｜　ptは上限（枠内へ自動縮小）　｜　既定 "
-                + GenericLabelRenderer.DefaultSizePt(draft.Small).ToString("0") + "pt";
+            for (int i = 0; i < 3; i++) rowPanels[i].Visible = !split && i < n;
+            if (split)
+            {
+                guide.Text = "印字形式：左右番号　｜　サイズ：小（幅50mm・カット長24mm）　｜　フォント：MS Pゴシック太字　｜　"
+                    + "印字位置は顧客左右番号と同じ　｜　既定 " + GenericLabelRenderer.SplitNumberDefaultPt.ToString("0") + "pt（枠内へ自動縮小）　｜　"
+                    + "中央の破線は切り分け目安（印刷しない）";
+            }
+            else
+            {
+                float band = GenericLabelRenderer.BandHeightMm(draft.Small, n);
+                string bandNote = n == 1
+                    ? ("1段＝高さ全体 " + band.ToString("0.###") + "mm")
+                    : (n + "段＝各 " + band.ToString("0.###") + "mm（等分）");
+                guide.Text = (draft.Small
+                    ? "サイズ：小（幅50mm・カット長24mm）　｜　"
+                    : "サイズ：大（幅50mm・カット長80mm／表示は80×50mm）　｜　")
+                    + bandNote + "　｜　左右・上下 0＝段の中央　｜　ptは上限（枠内へ自動縮小）　｜　既定 "
+                    + GenericLabelRenderer.DefaultSizePt(draft.Small).ToString("0") + "pt";
+            }
         }
 
         string CurrentOffsetKey()
         {
-            return GenericLabelRenderer.OffsetKey(document.PrinterSettings.PrinterName, draft.Small);
+            return GenericLabelRenderer.OffsetKey(document.PrinterSettings.PrinterName, draft.Small, draft.Format);
         }
         PrintOffset CurrentOffset() { return temporaryOffset ?? preferences.Get(CurrentOffsetKey()); }
 
@@ -413,7 +587,7 @@ namespace UnifiedLabels
             Safe(delegate
             {
                 SaveControlsToDraft();
-                UpdateRowVisibility();
+                UpdateFormatVisibility();
                 PrintOffset offset = CurrentOffset();
                 Bitmap bmp = CreatePreview(offset);
                 Image old = preview.Image;
@@ -438,14 +612,19 @@ namespace UnifiedLabels
                     float scale = Math.Min(520f / mmWidth, 250f / mmHeight), width = mmWidth * scale, height = mmHeight * scale;
                     float left = (560 - width) / 2, top = 25 + (250 - height) / 2;
                     using (Font caption = new Font("Yu Gothic UI", 10, FontStyle.Bold, GraphicsUnit.Pixel))
-                        g.DrawString(draft.Small ? "小：50 × 24 mm" : "大：80 × 50 mm（用紙幅50・カット長80 mm）", caption, Brushes.Black, 12, 8);
+                    {
+                        string captionText = draft.Small ? "小：50 × 24 mm" : "大：80 × 50 mm（用紙幅50・カット長80 mm）";
+                        if (GenericLabelRenderer.IsSplitNumber(draft)) captionText = "左右番号／小：50 × 24 mm";
+                        g.DrawString(captionText, caption, Brushes.Black, 12, 8);
+                    }
                     g.FillRectangle(Brushes.White, left, top, width, height);
                     GraphicsState state = g.Save();
                     g.SetClip(new RectangleF(left, top, width, height));
                     g.TranslateTransform(left, top);
                     g.ScaleTransform(scale * 0.254f, scale * 0.254f);
                     g.TranslateTransform((float)offset.X / .254f, (float)offset.Y / .254f);
-                    GenericLabelRenderer.Draw(g, draft);
+                    // 画面プレビューのみ中央切り分け目安を描画（印刷・印刷プレビューは Draw(g,d)）。
+                    GenericLabelRenderer.Draw(g, draft, true);
                     g.Restore(state);
                     using (Pen outline = new Pen(Color.FromArgb(90, 100, 110), 1))
                         g.DrawRectangle(outline, left, top, width, height);
@@ -459,7 +638,8 @@ namespace UnifiedLabels
         {
             SaveControlsToDraft();
             string key = CurrentOffsetKey();
-            string title = document.PrinterSettings.PrinterName + "\r\n汎用ラベル ／ " + (draft.Small ? "小" : "大");
+            string title = document.PrinterSettings.PrinterName + "\r\n汎用ラベル ／ "
+                + (GenericLabelRenderer.IsSplitNumber(draft) ? "左右番号／小" : (draft.Small ? "小" : "大"));
             using (OffsetDialog dlg = new OffsetDialog(title, preferences.Get(key), CreatePreview,
                 delegate(PrintOffset p)
                 {
@@ -548,7 +728,8 @@ namespace UnifiedLabels
                 MessageBox.Show(this, error, "入力の確認", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return false;
             }
-            document.DocumentName = "ネームラベル - 汎用ラベル - " + (draft.Small ? "小" : "大");
+            document.DocumentName = "ネームラベル - 汎用ラベル - "
+                + (GenericLabelRenderer.IsSplitNumber(draft) ? "左右番号" : (draft.Small ? "小" : "大"));
             return true;
         }
 
@@ -559,7 +740,7 @@ namespace UnifiedLabels
             {
                 e.Graphics.PageUnit = GraphicsUnit.Inch;
                 e.Graphics.ScaleTransform(0.01f, 0.01f);
-                // 大ネームは既存顧客ラベルと同様に -90° 回転。
+                // 大ネームは既存顧客ラベルと同様に -90° 回転。左右番号は小固定のため回転なし。
                 if (!draft.Small)
                 {
                     e.Graphics.RotateTransform(-90);
@@ -567,7 +748,7 @@ namespace UnifiedLabels
                 }
                 PrintOffset offset = CurrentOffset();
                 e.Graphics.TranslateTransform((float)offset.X / .254f, (float)offset.Y / .254f);
-                GenericLabelRenderer.Draw(e.Graphics, draft);
+                GenericLabelRenderer.Draw(e.Graphics, draft, false);
                 e.HasMorePages = false;
             }
             finally { e.Graphics.Restore(state); }
@@ -585,10 +766,13 @@ namespace UnifiedLabels
             Directory.CreateDirectory(folder);
             string keySmall = GenericLabelRenderer.OffsetKey("TestPrinter", true);
             string keyLarge = GenericLabelRenderer.OffsetKey("TestPrinter", false);
+            string keySplit = GenericLabelRenderer.OffsetKey("TestPrinter", true, GenericLabelFormat.SplitNumber);
             if (keySmall == keyLarge) throw new Exception("大小のオフセットキーが同一です");
+            if (keySmall == keySplit) throw new Exception("左右番号のオフセットキーが通常小と同一です");
             if (!keySmall.Contains(GenericLabelRenderer.SettingsIdentity)) throw new Exception("汎用オフセット識別子がありません");
             // 顧客キーと衝突しないこと（顧客 SettingsIdentity は「顧客|形式|…」形式）。
             if (keySmall.Split('|').Length < 3) throw new Exception("オフセットキー形式が不正です");
+            if (!keySplit.EndsWith("|左右番号")) throw new Exception("左右番号オフセットキー形式が不正です");
 
             // 等分帯の高さ（大＝50mm基準）
             if (Math.Abs(GenericLabelRenderer.BandHeightMm(false, 1) - 50f) > 0.001f) throw new Exception("大1段帯が高さ50mmではありません");
@@ -600,6 +784,7 @@ namespace UnifiedLabels
             foreach (string family in new[] { "HG丸ｺﾞｼｯｸM-PRO", "MS PGothic" })
             for (int rows = 1; rows <= 3; rows++)
             {
+                draft.Format = GenericLabelFormat.Rows;
                 draft.Small = small;
                 draft.Family = family;
                 draft.Rows = rows;
@@ -612,7 +797,7 @@ namespace UnifiedLabels
                     draft.OffsetYMm[i] = 0f;
                 }
                 ApplyDraftToControls();
-                UpdateRowVisibility();
+                UpdateFormatVisibility();
                 if (GenericLabelRenderer.Validate(draft) != null)
                     throw new Exception("標準サンプルが不正: " + GenericLabelRenderer.Validate(draft));
                 using (Bitmap b = CreatePreview(new PrintOffset()))
@@ -635,7 +820,92 @@ namespace UnifiedLabels
                 }
             }
 
+            // 左右番号：入力・描画・プレビュー目安・印刷経路（目安なし）・オフセットキー
+            draft.Format = GenericLabelFormat.SplitNumber;
+            draft.Small = true;
+            draft.Family = GenericLabelRenderer.SplitNumberFamily;
+            draft.Number = "A-12";
+            draft.NumberSize = GenericLabelRenderer.SplitNumberDefaultPt;
+            ApplyDraftToControls();
+            UpdateFormatVisibility();
+            if (formatBox.SelectedIndex != 1) throw new Exception("左右番号の印字形式選択が反映されていません");
+            if (!splitPanel.Visible || sizeBox.Visible) throw new Exception("左右番号時の入力パネル表示が不正です");
+            if (GenericLabelRenderer.Validate(draft) != null)
+                throw new Exception("左右番号の標準サンプルが不正: " + GenericLabelRenderer.Validate(draft));
+            draft.Number = "番号!";
+            if (GenericLabelRenderer.Validate(draft) == null || !GenericLabelRenderer.Validate(draft).Contains("英字"))
+                throw new Exception("左右番号の禁止文字検証失敗");
+            draft.Number = "";
+            if (GenericLabelRenderer.Validate(draft) == null) throw new Exception("左右番号の空入力検証失敗");
+            draft.Number = "ABC-12345";
+            draft.NumberSize = 36f;
+            if (GenericLabelRenderer.Validate(draft) != null)
+                throw new Exception("長い左右番号が拒否された: " + GenericLabelRenderer.Validate(draft));
+            RectangleF leftArea, rightArea;
+            LabelCatalog.SplitNumberAreas(out leftArea, out rightArea);
+            if (Math.Abs(leftArea.X - 1f / 0.254f) > 0.01f || Math.Abs(rightArea.X - 26f / 0.254f) > 0.01f)
+                throw new Exception("SplitNumberAreas の座標が既存仕様と異なります");
+            using (Bitmap previewBmp = CreatePreview(new PrintOffset()))
+                previewBmp.Save(Path.Combine(folder, "preview-split-number.png"));
+            using (Bitmap drawBmp = new Bitmap(300, 150))
+            using (Graphics g = Graphics.FromImage(drawBmp))
+            {
+                g.Clear(Color.White);
+                g.ScaleTransform(6 * 0.254f, 6 * 0.254f);
+                GenericLabelRenderer.Draw(g, draft, false);
+                drawBmp.Save(Path.Combine(folder, "draw-split-number.png"));
+            }
+            using (Bitmap printBmp = new Bitmap(1200, 600))
+            using (Graphics g = Graphics.FromImage(printBmp))
+            {
+                g.Clear(Color.White);
+                PrintPage(this, new PrintPageEventArgs(g, new Rectangle(0, 0, 400, 200), new Rectangle(0, 0, 400, 200), document.DefaultPageSettings));
+                printBmp.Save(Path.Combine(folder, "print-split-number.png"));
+            }
+            // プレビュー（目安あり）と印刷描画（目安なし）が異なること
+            using (Bitmap withGuide = new Bitmap(300, 150))
+            using (Bitmap noGuide = new Bitmap(300, 150))
+            using (Graphics g1 = Graphics.FromImage(withGuide))
+            using (Graphics g2 = Graphics.FromImage(noGuide))
+            {
+                g1.Clear(Color.White); g2.Clear(Color.White);
+                g1.ScaleTransform(6 * 0.254f, 6 * 0.254f);
+                g2.ScaleTransform(6 * 0.254f, 6 * 0.254f);
+                draft.Number = "88";
+                GenericLabelRenderer.Draw(g1, draft, true);
+                GenericLabelRenderer.Draw(g2, draft, false);
+                bool guideDiff = false;
+                for (int x = 0; x < withGuide.Width && !guideDiff; x += 2)
+                    for (int y = 0; y < withGuide.Height; y += 2)
+                        if (withGuide.GetPixel(x, y) != noGuide.GetPixel(x, y)) { guideDiff = true; break; }
+                if (!guideDiff) throw new Exception("中央切り分け目安がプレビュー専用になっていません");
+            }
+            // 領域・DrawSplitSides(Bold) 経路の共有確認（顧客経路 StyleFor とは太字のみ差）
+            using (Bitmap a = new Bitmap(200, 100))
+            using (Bitmap b = new Bitmap(200, 100))
+            using (Graphics ga = Graphics.FromImage(a))
+            using (Graphics gb = Graphics.FromImage(b))
+            {
+                ga.Clear(Color.White); gb.Clear(Color.White);
+                ga.ScaleTransform(4 * 0.254f, 4 * 0.254f);
+                gb.ScaleTransform(4 * 0.254f, 4 * 0.254f);
+                LabelCatalog.DrawSplitSides(ga, "77", "MS PGothic", 36f, FontStyle.Bold);
+                draft.Number = "77"; draft.NumberSize = 36f;
+                GenericLabelRenderer.Draw(gb, draft, false);
+                bool same = true;
+                for (int x = 0; x < a.Width && same; x += 2)
+                    for (int y = 0; y < a.Height; y += 2)
+                        if (a.GetPixel(x, y) != b.GetPixel(x, y)) { same = false; break; }
+                if (!same) throw new Exception("汎用左右番号が DrawSplitSides(Bold) と一致しません");
+            }
+            preferences.Set(keySplit, new PrintOffset(0.5m, 0.5m));
+            if (preferences.Get(keySmall).X != 0) throw new Exception("左右番号オフセットが通常小へ混入");
+            draft.Format = GenericLabelFormat.Rows;
+            ApplyDraftToControls();
+            UpdateFormatVisibility();
+
             // 大/小切替で各段ptが既定（48/26）へ戻ること
+            draft.Format = GenericLabelFormat.Rows;
             draft.Small = true;
             draft.Rows = 2;
             draft.Sizes[0] = 12f; draft.Sizes[1] = 14f; draft.Sizes[2] = 16f;
@@ -650,6 +920,7 @@ namespace UnifiedLabels
                 throw new Exception("小へ切替時の既定26pt反映失敗");
 
             // 長い文字は自動縮小で通る（従来のはみ出し拒否はしない）
+            draft.Format = GenericLabelFormat.Rows;
             draft.Small = true;
             draft.Rows = 1;
             draft.Family = "MS PGothic";
@@ -666,6 +937,7 @@ namespace UnifiedLabels
             }
 
             // 段内位置：初期は中央(0,0)、変更がプレビューに反映、非表示段は保持
+            draft.Format = GenericLabelFormat.Rows;
             draft.Small = false;
             draft.Rows = 2;
             draft.Family = "MS PGothic";
@@ -697,6 +969,7 @@ namespace UnifiedLabels
             if (rowOffsetX[2].Value != 1.5m || rowOffsetY[2].Value != -1m) throw new Exception("段数復帰で位置復元失敗");
 
             // 段数切替で非表示行の入力が復元されること
+            draft.Format = GenericLabelFormat.Rows;
             draft.Rows = 3;
             draft.Texts[0] = "上"; draft.Texts[1] = "中"; draft.Texts[2] = "下";
             draft.Sizes[0] = 18; draft.Sizes[1] = 16; draft.Sizes[2] = 14;
@@ -710,6 +983,7 @@ namespace UnifiedLabels
             if (rowTexts[1].Text != "中" || rowTexts[2].Text != "下") throw new Exception("段数復帰で入力復元失敗");
 
             // 空行／段内オフセットによるはみ出し
+            draft.Format = GenericLabelFormat.Rows;
             draft.Rows = 2; draft.Texts[0] = "あり"; draft.Texts[1] = "";
             draft.Sizes[0] = 26; draft.Sizes[1] = 26;
             if (GenericLabelRenderer.Validate(draft) == null || !GenericLabelRenderer.Validate(draft).Contains("2段目"))
@@ -725,6 +999,7 @@ namespace UnifiedLabels
             draft.OffsetXMm[1] = 0;
 
             // 印字位置オフセット反映（顧客と別キー）
+            draft.Format = GenericLabelFormat.Rows;
             draft.Rows = 1;
             draft.Small = true;
             draft.Texts[0] = "オフセット";
@@ -743,14 +1018,15 @@ namespace UnifiedLabels
 
             // 顧客オフセットキーと混ざらないこと
             string customerLike = "TestPrinter|よつ葉乳業㈱十勝工場|小ネーム（QR）|True|黒下：左前";
-            if (keySmall == customerLike || keyLarge == customerLike) throw new Exception("顧客キーと衝突");
+            if (keySmall == customerLike || keyLarge == customerLike || keySplit == customerLike) throw new Exception("顧客キーと衝突");
             preferences.Set(keySmall, new PrintOffset(1.5m, -0.5m));
             if (preferences.Get(customerLike).X != 0) throw new Exception("顧客オフセットへ混入");
             if (preferences.Get(keySmall).X != 1.5m || preferences.Get(keyLarge).X != 0)
                 throw new Exception("汎用オフセットの大小分離失敗");
+            if (preferences.Get(keySplit).X != 0.5m) throw new Exception("左右番号オフセット保持失敗");
 
             File.WriteAllText(Path.Combine(folder, "generic-verification.txt"),
-                "PASS: 自動縮小(Fit)・既定pt大48/小26・等分帯・段内位置・大/小×フォント×1～3段・印刷経路・段数復帰・空行/オフセットはみ出し・印字オフセットキー分離。実プリンター印字・カットは未実施。",
+                "PASS: 自動縮小(Fit)・既定pt大48/小26・等分帯・段内位置・大/小×フォント×1～3段・印刷経路・段数復帰・空行/オフセットはみ出し・印字オフセットキー分離・左右番号(DrawSplitSides共通・目安はプレビューのみ)。実プリンター印字・カットは未実施。",
                 Encoding.UTF8);
         }
     }
