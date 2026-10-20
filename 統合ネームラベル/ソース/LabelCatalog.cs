@@ -329,16 +329,20 @@ namespace UnifiedLabels
         // Fit against both width and height, in 1/100-inch drawing units.
         public static float Fit(Graphics g,string text,string family,RectangleF area,float maximum)
         {
+            return Fit(g,text,family,StyleFor(family),area,maximum);
+        }
+        public static float Fit(Graphics g,string text,string family,FontStyle style,RectangleF area,float maximum)
+        {
             using(StringFormat format=new StringFormat(StringFormat.GenericTypographic)) {
                 format.FormatFlags|=StringFormatFlags.NoWrap;
-                using(Font maximumFont=new Font(family,maximum*100f/72f,StyleFor(family),GraphicsUnit.Pixel)) {
+                using(Font maximumFont=new Font(family,maximum*100f/72f,style,GraphicsUnit.Pixel)) {
                     SizeF maximumSize=g.MeasureString(text.Length==0?"国":text,maximumFont,new PointF(0,0),format);
                     if(maximumSize.Width<=area.Width && maximumSize.Height<=area.Height) return maximum;
                 }
                 float low=1,high=maximum;
                 for(int n=0;n<20;n++) {
                     float p=(low+high)/2;
-                    using(Font f=new Font(family,p*100f/72f,StyleFor(family),GraphicsUnit.Pixel)) {
+                    using(Font f=new Font(family,p*100f/72f,style,GraphicsUnit.Pixel)) {
                         SizeF measured=g.MeasureString(text.Length==0?"国":text,f,new PointF(0,0),format);
                         if(measured.Width<=area.Width && measured.Height<=area.Height) low=p; else high=p;
                     }
@@ -370,14 +374,41 @@ namespace UnifiedLabels
         { Line(g,text,family,area,maximum,strict,align,StringAlignment.Center); }
         public static void Line(Graphics g,string text,string family,RectangleF area,float maximum,bool strict,StringAlignment align,StringAlignment lineAlign)
         {
+            Line(g,text,family,StyleFor(family),area,maximum,strict,align,lineAlign);
+        }
+        public static void Line(Graphics g,string text,string family,FontStyle style,RectangleF area,float maximum)
+        {
+            Line(g,text,family,style,area,maximum,false,StringAlignment.Center,StringAlignment.Center);
+        }
+        public static void Line(Graphics g,string text,string family,FontStyle style,RectangleF area,float maximum,bool strict,StringAlignment align,StringAlignment lineAlign)
+        {
             if(String.IsNullOrWhiteSpace(text)) return;
-            float size=strict?maximum:Fit(g,text,family,area,maximum);
-            using(Font f=new Font(family,size*100f/72f,StyleFor(family),GraphicsUnit.Pixel))
+            float size=strict?maximum:Fit(g,text,family,style,area,maximum);
+            using(Font f=new Font(family,size*100f/72f,style,GraphicsUnit.Pixel))
             using(StringFormat format=new StringFormat(StringFormat.GenericTypographic)) {
                 format.FormatFlags|=StringFormatFlags.NoWrap;
                 format.Alignment=align; format.LineAlignment=lineAlign;
                 g.DrawString(text,f,Brushes.Black,area,format);
             }
+        }
+        /// <summary>小ネーム左右分割の印字領域（既存 SplitNumber / SplitCode と同一）。左 Mm(1,1,23,22)・右 Mm(26,1,23,22)。</summary>
+        public static void SplitNumberAreas(out RectangleF left, out RectangleF right)
+        {
+            left=Mm(1,1,23,22);
+            right=Mm(26,1,23,22);
+        }
+        /// <summary>同じ番号／記号を左右に印字。顧客 SplitNumber・SplitCode は StyleFor のまま（見た目変更なし）。</summary>
+        public static void DrawSplitSides(Graphics g, string text, string family, float maximumPt)
+        {
+            DrawSplitSides(g, text, family, maximumPt, StyleFor(family));
+        }
+        /// <summary>左右分割印字。汎用「左右番号」は Bold 指定で呼ぶ。</summary>
+        public static void DrawSplitSides(Graphics g, string text, string family, float maximumPt, FontStyle style)
+        {
+            RectangleF left, right;
+            SplitNumberAreas(out left, out right);
+            Line(g, text, family, style, left, maximumPt);
+            Line(g, text, family, style, right, maximumPt);
         }
         static RectangleF Nudge(RectangleF area,float mm) {
             if(mm<=0) return area;
@@ -436,7 +467,7 @@ namespace UnifiedLabels
                 Line(g,d.Header,s.Family,upper,heading,false,upperAlign,s.UpperLineAlign);
                 Line(g,name,s.Family,lower,maximum,false,StringAlignment.Center,s.LowerLineAlign);return;
             }
-            if(s.Layout=="SplitCode") {Line(g,name,s.Family,Mm(1,1,23,22),maximum);Line(g,name,s.Family,Mm(26,1,23,22),maximum);return;}
+            if(s.Layout=="SplitCode") { DrawSplitSides(g,name,s.Family,maximum); return; }
             if(s.Layout=="DeptName" || s.Layout=="DeptNumberName") {
                 if(s.Layout=="DeptNumberName") {
                     float uy, uh;
@@ -491,8 +522,7 @@ namespace UnifiedLabels
                 Line(g,top,s.HeaderFamily!=""?s.HeaderFamily:s.Family,upper,topPt,false,upperAlign,s.UpperLineAlign);
                 Line(g,name,s.Family,lower,maximum,s.StrictFont,StringAlignment.Center,s.LowerLineAlign);
             } else if(s.Layout=="SplitNumber") {
-                Line(g,d.Number,s.Family,Mm(1,1,23,22),numberPt);
-                Line(g,d.Number,s.Family,Mm(26,1,23,22),numberPt);
+                DrawSplitSides(g,d.Number,s.Family,numberPt);
             } else if(s.Layout=="NumberOnly" || s.Layout=="SizeNumber") {
                 Line(g,name,s.Family,Mm(1,1,mm.Width-2,mm.Height-2),numberPt);
             } else {
