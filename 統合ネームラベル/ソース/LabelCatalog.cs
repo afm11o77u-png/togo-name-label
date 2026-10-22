@@ -13,6 +13,10 @@ namespace UnifiedLabels
         public int SourceRow, NumberLength, PreviousSourceRow;
         public string FixedColor="", Reading="", HeaderFamily="", NumberPrefix="", Pending="", ColorCaption="区分";
         public string[] Groups=new string[0], Colors=new string[0], Departments;
+        /// <summary>見本下「部署・役職」参考表示用の独立役職一覧（印字には載せない）。</summary>
+        public string[] Roles;
+        /// <summary>Excelで対応が明示されているときの「部署｜役職」行。独立一覧と併用しない。</summary>
+        public string[] DeptRolePairs;
         public bool SurnameOnly, SpaceSurname, StrictFont;
         public bool SurnameSizing, ColorFromDepartment, UnknownSize, IndentUpper;
         public float MiddleNudge;
@@ -78,6 +82,28 @@ namespace UnifiedLabels
             if(kind==21) return new string[]{"製造課(加工)","製造課(食肉)"};
             if(kind==25 || kind==26) return new string[]{"と畜場","加工場"};
             return null;
+        }
+        /// <summary>詳細画面・見本下の「部署・役職」参考テキスト。対応表があれば表、なければ独立一覧。欠落は作らない。</summary>
+        public static string DeptRoleInfoText(LabelSpec s) {
+            if(s==null) return "";
+            if(s.DeptRolePairs!=null && s.DeptRolePairs.Length>0) {
+                System.Text.StringBuilder table=new System.Text.StringBuilder();
+                for(int i=0;i<s.DeptRolePairs.Length;i++) {
+                    if(i>0) table.Append("\r\n");
+                    table.Append(s.DeptRolePairs[i]??"");
+                }
+                return table.ToString();
+            }
+            if(s.Roles==null || s.Roles.Length==0) return "";
+            System.Text.StringBuilder text=new System.Text.StringBuilder();
+            if(s.Departments!=null && s.Departments.Length>0) {
+                text.Append("部署：");
+                for(int i=0;i<s.Departments.Length;i++) { if(i>0) text.Append("、"); text.Append(s.Departments[i]); }
+                text.Append("\r\n");
+            }
+            text.Append("役職：");
+            for(int i=0;i<s.Roles.Length;i++) { if(i>0) text.Append("、"); text.Append(s.Roles[i]); }
+            return text.ToString();
         }
         public static readonly string[] ColorDepartments={"サラダ","仕分","トリミング","前洗浄","入荷・払出","計量","脱水洗浄","衛生","品質保証室","製造","事務","社長"};
         public static readonly string[] DepartmentColors={"青","青","緑","緑","緑","赤","赤","赤","青","白","白","白"};
