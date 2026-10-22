@@ -125,8 +125,10 @@ namespace UnifiedLabels
         readonly Label sampleColor = new Label();
         // 色帯は最大6枚（3行×2列）。鱗幸など赤・緑・青・白・黄の5色凡例を表示するため4枚から拡張。
         readonly Label[] colorLegend = {new Label(),new Label(),new Label(),new Label(),new Label(),new Label()};
+        // 見本下の独立「部署・役職」参考（印字見本には載せない）
+        readonly Label deptRoleCaption = new Label(), deptRoleInfo = new Label();
         readonly System.Collections.Generic.List<Control> footerControls=new System.Collections.Generic.List<Control>();
-        int legendHeight;
+        int legendHeight, deptRoleSlot;
         int emphasisStart=-1, emphasisLength;
         readonly Button emphasize=new Button(), clearEmphasis=new Button();
         readonly Label emphasisGuide=new Label();
@@ -305,6 +307,10 @@ public MainForm(string settingsFile)
             Label sampleNote=new Label {Text="見本の名前・番号は印刷されません。\r\n表示・印刷時、全角スペースはすべて半角に変換します。\r\n各入力欄右のptでサイズを変更できます。\r\n未変更時はカタログ／自動調整の既定のままです。",Left=SampleNoteLeft,Top=SampleTop,Width=FormClientWidth-SampleNoteLeft-16,Height=SampleHeight};
             Controls.Add(sampleNote);
             sampleColor.SetBounds(SampleNoteLeft,SampleColorTop,FormClientWidth-SampleNoteLeft-16,20); sampleColor.TextAlign=ContentAlignment.MiddleLeft; Controls.Add(sampleColor);
+            // 見本直下の「部署・役職」参考（あすかHOUSE東苗穂など）。色帯より上の枠に置き、表示時だけ footer を押し下げる。
+            deptRoleCaption.SetBounds(PreviewX,LegendTop,FormClientWidth-PreviewX-16,18); deptRoleCaption.Visible=false; Controls.Add(deptRoleCaption);
+            deptRoleInfo.SetBounds(PreviewX,LegendTop+18,FormClientWidth-PreviewX-16,0); deptRoleInfo.Visible=false;
+            deptRoleInfo.Padding=new Padding(4,2,4,2); Controls.Add(deptRoleInfo);
             // 期生色帯は見本の下・プリンター欄の上。表示時だけ footer を押し下げて重なりを防ぐ。
             for(int n=0;n<colorLegend.Length;n++) { colorLegend[n].SetBounds(LeftX+(n%2)*460,LegendTop+(n/2)*36,450,34); colorLegend[n].BorderStyle=BorderStyle.FixedSingle; colorLegend[n].Padding=new Padding(4,1,0,0); colorLegend[n].Visible=false; Controls.Add(colorLegend[n]); }
             const int printerFieldTop = LegendTop + CaptionToField;
@@ -327,10 +333,10 @@ public MainForm(string settingsFile)
             Button adjust=new Button {Text="印字位置調整"};Field(adjust,310,ButtonTop,130);offsetSummary.SetBounds(450,ButtonTop,120,36);Controls.Add(offsetSummary);adjust.Click+=delegate {Safe(OpenOffset);};
             Field(openTasks,580,ButtonTop,90);
             status.SetBounds(LeftX,StatusTop,FormClientWidth-24,36); Controls.Add(status);
-            // 色帯自体は押し下げ対象外（LegendTop に固定し、プリンター以降だけ動かす）
+            // 色帯・部署役職参考は押し下げ対象外（LegendTop 枠に置き、プリンター以降だけ動かす）
             foreach(Control control in Controls) {
                 if(control.Top<LegendTop) continue;
-                bool legend=false;
+                bool legend=control==deptRoleCaption || control==deptRoleInfo;
                 for(int n=0;n<colorLegend.Length;n++) if(control==colorLegend[n]) { legend=true; break; }
                 if(!legend) footerControls.Add(control);
             }
@@ -687,6 +693,7 @@ public MainForm(string settingsFile)
         void UpdateNumberGuide()
         {
             LabelSpec spec=LabelCatalog.Items[active];
+            UpdateDeptRoleInfo();
             UpdateColorLegend();
             Color bandBlue=Color.FromArgb(218,237,255);
             int count=digits.SelectedIndex==1?5:4;
@@ -762,6 +769,28 @@ public MainForm(string settingsFile)
                 label.Height=needed; ClientSize=new Size(ClientSize.Width,ClientSize.Height+delta);
             }
         }
+        void UpdateDeptRoleInfo()
+        {
+            string body=active>=0?LabelCatalog.DeptRoleInfoText(LabelCatalog.Items[active]):"";
+            bool show=body!="";
+            deptRoleCaption.Visible=show; deptRoleCaption.Text=show?"部署・役職":"";
+            deptRoleInfo.Visible=show; deptRoleInfo.Text=body;
+            int width=Math.Max(160,ClientSize.Width-PreviewX-16);
+            int captionH=show?18:0;
+            int bodyH=0;
+            if(show) bodyH=Math.Max(22,TextRenderer.MeasureText(body,Font,new Size(Math.Max(120,width-8),2000),TextFormatFlags.WordBreak).Height+10);
+            int needed=show?captionH+bodyH+4:0;
+            if(needed!=deptRoleSlot) {
+                int delta=needed-deptRoleSlot;
+                foreach(Control control in footerControls) control.Top+=delta;
+                ClientSize=new Size(ClientSize.Width,ClientSize.Height+delta);
+                deptRoleSlot=needed;
+            }
+            if(!show) return;
+            deptRoleCaption.SetBounds(PreviewX,LegendTop,width,captionH);
+            deptRoleInfo.SetBounds(PreviewX,LegendTop+captionH,width,bodyH);
+            deptRoleCaption.BringToFront(); deptRoleInfo.BringToFront();
+        }
         void UpdateColorLegend()
         {
             string[] groups=LabelCatalog.ColorGroups(active), groupColors=LabelCatalog.GroupColors(active);
@@ -775,7 +804,8 @@ public MainForm(string settingsFile)
                 for(int i=0;i<groups.Length;i++) if(groupColors[i]==color) list+="【"+groups[i]+"】 ／ ";
                 cardHeight=Math.Max(cardHeight,TextRenderer.MeasureText(list,Font,new Size(Math.Max(120,cardWidth-12),1000),TextFormatFlags.WordBreak).Height+20);
             }
-            // 見本・注意書きの下に確保。footer（プリンター以降）だけ押し下げ、入力／見本とは重ねない。
+            // 見本・注意書きの下に確保（部署・役職参考の下）。footer（プリンター以降）だけ押し下げ、入力／見本とは重ねない。
+            int legendBase=LegendTop+deptRoleSlot;
             int targetHeight=colors.Count==0?0:((colors.Count+1)/2)*(cardHeight+4)+4;
             if(targetHeight!=legendHeight) {
                 int delta=targetHeight-legendHeight;
@@ -785,7 +815,7 @@ public MainForm(string settingsFile)
             for(int n=0;n<colorLegend.Length;n++) {
                 colorLegend[n].Visible=n<colors.Count;
                 if(n>=colors.Count) continue;
-                colorLegend[n].SetBounds(LeftX+(n%2)*(cardWidth+gap),LegendTop+(n/2)*(cardHeight+4),cardWidth,cardHeight);
+                colorLegend[n].SetBounds(LeftX+(n%2)*(cardWidth+gap),legendBase+(n/2)*(cardHeight+4),cardWidth,cardHeight);
                 colorLegend[n].BackColor=LabelCatalog.Swatch(colors[n]);
                 string list="";
                 for(int d=0;d<groups.Length;d++) if(groupColors[d]==colors[n]) {

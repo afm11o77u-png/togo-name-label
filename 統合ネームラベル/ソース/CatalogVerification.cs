@@ -25,7 +25,7 @@ namespace UnifiedLabels {
   public void VerifyLatest(string folder){
    Directory.CreateDirectory(folder);Show();
    // SourceRow は五十音順2（鱗幸=230/231）の行番号
-   foreach(int row in new[]{222,235,237,33,78,226,227,230,140,12,161,10,120,199,174,165,171,109,48,157,77}){
+   foreach(int row in new[]{222,235,237,33,78,226,227,230,140,12,161,10,11,120,199,174,165,171,109,48,157,77}){
     kinds.SelectedIndex=LatestRow(row);var spec=LabelCatalog.Items[active];
     if(department.Items.Count>0)department.SelectedIndex=0;
     if(colorDepartment.Items.Count>0)colorDepartment.SelectedIndex=0;
@@ -46,6 +46,21 @@ namespace UnifiedLabels {
     Need(smallPlacement.Visible && smallPlacement.Height>0 && smallPlacement.Text.StartsWith("貼り付け先：") && smallPlacement.Text.IndexOf(spec.Placement)>=0,"Placement band missing "+row);
     Need(largePlacement.Text.IndexOf("【選択中】")<0,"Selection guide should stay hidden "+row);
     Need(smallPlacement.Bottom<=largePlacement.Top && largePlacement.Bottom<=guide.Top && status.Bottom<=ClientSize.Height,"Guide overlaps "+row);
+    if(row==11){
+     Need(LabelCatalog.Customers[spec.Customer]=="あすかHOUSE東苗穂","Higashinaebo customer");
+     Need(spec.Placement=="詳細未指定","Higashinaebo placement must stay unchanged");
+     Need(spec.Departments!=null && spec.Departments.Length==6 && spec.Departments[0]=="介護" && spec.Departments[5]=="医師","Higashinaebo departments incomplete");
+     Need(spec.Roles!=null && spec.Roles.Length==4 && spec.Roles[0]=="リーダー" && spec.Roles[3]=="施設長","Higashinaebo roles incomplete");
+     Need(spec.DeptRolePairs==null,"Higashinaebo must not invent dept-role pairs");
+     Need(deptRoleCaption.Visible && deptRoleCaption.Text=="部署・役職","Higashinaebo dept-role caption missing");
+     Need(deptRoleInfo.Visible && deptRoleInfo.Text.IndexOf("部署：介護、デイケア、看護、リハビリ、栄養課、医師")>=0,"Higashinaebo department list missing");
+     Need(deptRoleInfo.Text.IndexOf("役職：リーダー、主任、課長、施設長")>=0,"Higashinaebo role list missing");
+     Need(deptRoleInfo.Text.IndexOf("｜")<0,"Higashinaebo must stay as independent lists");
+     Need(roleLabel.Text.IndexOf("ふりがな")>=0 && role.Text=="やまだ","Higashinaebo role field must stay furigana");
+     Need(department.Visible && department.Items.Count==6,"Higashinaebo department combo missing");
+     Need(deptRoleInfo.Bottom<=printers.Top,"Higashinaebo dept-role overlaps printers");
+    }
+    if(row==10){Need(spec.Pending!="" && (spec.Roles==null || spec.Roles.Length==0) && !deptRoleInfo.Visible,"Deleted Asuka HOUSE must stay pending without dept-role panel");}
     if(row==33){Need(!colorDepartment.Visible,"Duplicate department selection");department.SelectedItem="洋菓子チーム";Need(LabelCatalog.ColorName(active,Current())=="赤","Department color not linked");}
     if(row==222){Need(LabelCatalog.ColorName(active,Current())=="緑？","Fresh fish provisional color");header.Text="その他";Need(LabelCatalog.ColorName(active,Current())=="先方から指定","Unspecified department color");header.Text="鮮魚";}
     if(row==140 || row==12 || row==161){Need(LabelCatalog.ColorName(active,Current()).Contains("？"),"Question mark lost");Need(LabelCatalog.Swatch(LabelCatalog.ColorName(active,Current()))==(row==12?Color.LightCoral:Color.LightSkyBlue),"Provisional swatch wrong");}
