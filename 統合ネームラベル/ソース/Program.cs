@@ -658,7 +658,10 @@ public MainForm(string settingsFile)
             SelectedCustomerIndex=spec.Customer;
             formats.Items.Clear();
             int[] options=LabelCatalog.ForCustomer(spec.Customer);
-            for(int n=0;n<options.Length;n++) { formats.Items.Add(LabelCatalog.Items[options[n]].Format); if(options[n]==active) { formats.SelectedIndex=n; lastFormats[spec.Customer]=n; } }
+            int matched=0;
+            for(int n=0;n<options.Length;n++) { formats.Items.Add(LabelCatalog.Items[options[n]].Format); if(options[n]==active) matched=n; }
+            // Clear/Add 後は必ず通常寄りの matched を選ぶ（未設定のまま外国人側に残るのを防ぐ）
+            if(options.Length>0) { formats.SelectedIndex=matched; lastFormats[spec.Customer]=matched; }
             formats.Enabled=options.Length>1;
             selecting=false;
             LabelData d=drafts[active]; department.Visible=active==3; header.Visible=active!=3; department.SelectedItem=d.Header; header.Text=d.Header; role.Text=d.Role; person.Text=d.Person; number.Text=d.Number;
@@ -1219,14 +1222,24 @@ public MainForm(string settingsFile)
             if(header.Height<header.PreferredHeight) throw new Exception("会社名欄の高さがPreferredHeight未満で文字がクリップする "+header.Height+"<"+header.PreferredHeight);
             if(person.Visible && header.Height+2<person.Height) throw new Exception("会社名欄が氏名欄より低い "+header.Height+"<"+person.Height);
             if(headerLabel.Visible && header.Top+2<headerLabel.Bottom) throw new Exception("会社名ラベルが入力欄に重なって潰れて見える");
-            // 明日佳など多段入力: 部署枠と「苗字のふりがな」見出しが被らないこと
-            SelectedCustomerIndex=79; Application.DoEvents();
-            if(LabelCatalog.Items[active].Layout!="DeptFurigana") throw new Exception("明日佳の形式がDeptFuriganaでない");
+            // 明日佳など多段入力: 通常=DeptFurigana、外国人=DeptName。役職は Title 独立（ふりがな Role と別）。
+            int[] ashita=LabelCatalog.ForCustomer(79);
+            if(ashita.Length!=2) throw new Exception("明日佳の形式数が2でない "+ashita.Length);
+            if(LabelCatalog.Customers[79].IndexOf("桜台")<0 || LabelCatalog.Customers[79].IndexOf("宮の沢")<0) throw new Exception("明日佳の顧客名が桜台/宮の沢でない");
+            if(LabelCatalog.Items[ashita[0]].Layout!="DeptFurigana" || LabelCatalog.Items[ashita[1]].Layout!="DeptName") throw new Exception("明日佳の通常/外国人 Layout が指示と違う "+LabelCatalog.Items[ashita[0]].Layout+"/"+LabelCatalog.Items[ashita[1]].Layout);
+            if(LabelCatalog.Items[ashita[0]].Titles==null || LabelCatalog.Items[ashita[1]].Titles==null) throw new Exception("明日佳の役職 Title が通常/外国人に無い");
+            SelectedCustomerIndex=79; formats.SelectedIndex=0; Application.DoEvents(); // 通常（DeptFurigana）
+            if(active!=ashita[0] || LabelCatalog.Items[active].Layout!="DeptFurigana") throw new Exception("明日佳の形式がDeptFuriganaでない");
             if(!department.Visible || !roleLabel.Visible || !role.Visible || !person.Visible) throw new Exception("明日佳の入力欄が表示されていない");
+            if(!jobTitle.Visible || !jobTitleLabel.Visible) throw new Exception("明日佳の役職 Title コンボが出ていない");
             if(roleLabel.Text.IndexOf("ふりがな")<0) throw new Exception("明日佳のふりがな見出しが出ていない");
             if(roleLabel.Top<department.Bottom+4) throw new Exception("部署枠とふりがな見出しの上下余白が不足 "+department.Bottom+" / "+roleLabel.Top);
             if(personLabel.Top<role.Bottom+4) throw new Exception("ふりがな欄と苗字見出しの上下余白が不足 "+role.Bottom+" / "+personLabel.Top);
             if(department.Bounds.IntersectsWith(roleLabel.Bounds) || role.Bounds.IntersectsWith(personLabel.Bounds)) throw new Exception("明日佳の入力行が重なっている");
+            formats.SelectedIndex=1; Application.DoEvents(); // 外国人（DeptName）— Title は残し Role ふりがな欄は出さない
+            if(active!=ashita[1] || LabelCatalog.Items[active].Layout!="DeptName") throw new Exception("明日佳外国人の形式がDeptNameでない");
+            if(!jobTitle.Visible || roleLabel.Visible || role.Visible) throw new Exception("明日佳外国人で Title/ふりがなの分離が崩れている");
+            formats.SelectedIndex=0; Application.DoEvents();
             // 他の多段（部署＋役職＋氏名）も同様に行間を確保
             SelectedCustomerIndex=2; formats.SelectedIndex=0; Application.DoEvents();
             if(department.Visible && roleLabel.Visible && roleLabel.Top<department.Bottom+4) throw new Exception("Umios札幌で部署と役職見出しが近い");
