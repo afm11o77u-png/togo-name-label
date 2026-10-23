@@ -1297,7 +1297,8 @@ public MainForm(string settingsFile)
             PaperSize small=new PaperSize("50 × 24",197,94), large=new PaperSize("50 × 80",197,315), alias=new PaperSize("別名",197,315);
             if(ChoosePaper(new PaperSize[]{alias,small,large},1)!=large || ChoosePaper(new PaperSize[]{large,small},0)!=small || ChoosePaper(new PaperSize[]{alias},3)!=null || ChoosePaper(new PaperSize[]{large},0)!=null || ChoosePaper(new PaperSize[]{new PaperSize("ラベル 50 x 24 mm",315,197)},0)==null) throw new Exception("用紙自動選択検証失敗");
             int indented=0; for(int i=0;i<LabelCatalog.Items.Length;i++) if(LabelCatalog.Items[i].IndentUpper) indented++;
-            if(indented!=19) throw new Exception("左インデントの件数が違います "+indented);
+            // ホワイトファーム削除・鱗幸1段化で -2。東苗穂／明日佳（通常+外国人）の IndentUpper は維持・追加済み → 17。
+            if(indented!=17) throw new Exception("左インデントの件数が違います "+indented);
             int yama=0; for(int i=0;i<LabelCatalog.Items.Length;i++) if(LabelCatalog.Items[i].SourceRow==202) yama=i;
             using(Bitmap ink=new Bitmap(400,250)) using(Graphics g=Graphics.FromImage(ink)) {
                 g.Clear(Color.White); LabelCatalog.Draw(g,yama,new LabelData{Person="山田 太郎"});
