@@ -60,20 +60,35 @@ namespace UnifiedLabels {
      Need(LabelCatalog.Customers[spec.Customer]=="あすかHOUSE東苗穂","Higashinaebo customer");
      Need(spec.Placement.IndexOf("左胸")>=0,"Higashinaebo placement");
      Need(spec.Departments!=null && spec.Departments.Length==6,"Higashinaebo departments");
-     Need(spec.Titles!=null && jobTitle.Visible && jobTitle.Items.Count==6,"Higashinaebo title combo");
-     Need(roleLabel.Text.IndexOf("ふりがな")>=0,"Higashinaebo furigana field");
+     // 役職は空＋リーダー／主任／課長／施設長の5件（部署6件と混同しない）
+     Need(spec.Titles!=null && spec.Titles.Length==5 && jobTitle.Visible && jobTitle.Items.Count==5,"Higashinaebo title combo");
+     Need(spec.Titles[0]=="" && spec.Titles[1]=="リーダー" && spec.Titles[4]=="施設長","Higashinaebo title values");
+     Need(roleLabel.Visible && roleLabel.Text.IndexOf("ふりがな")>=0,"Higashinaebo furigana field");
      Need(spec.UpperBandMm==12.8f && spec.MiddleBandMm==12.5f && spec.LowerBandMm==24.7f,"Higashinaebo bands");
      jobTitle.SelectedIndex=1; // リーダー
-     Need(LabelCatalog.DeptWithTitle(Current()).IndexOf(" " )>=0,"Higashinaebo title join");
+     Need(LabelCatalog.DeptWithTitle(Current()).IndexOf(" ")>=0,"Higashinaebo title join");
      jobTitle.SelectedIndex=0;
+     Need(LabelCatalog.DeptWithTitle(Current()).IndexOf(" ")<0,"Higashinaebo empty title has no join");
      Need(LabelCatalog.IsHiddenCustomerName("あすかHOUSE") && LabelCatalog.IsHiddenCustomerName("ホワイトファーム"),"Deleted customers stay hidden");
     }
     if(row==78){
      Need(LabelCatalog.Customers[spec.Customer].IndexOf("桜台")>=0 && LabelCatalog.Customers[spec.Customer].IndexOf("宮の沢")>=0,"Ashita rename");
      Need(spec.SpaceFurigana,"Ashita furigana spacing");
-     Need(spec.Titles!=null && jobTitle.Visible,"Ashita title combo");
+     // 役職は空＋主任／師長／科長／部長の5件。ふりがな Role と独立。
+     Need(spec.Layout=="DeptFurigana" && spec.Titles!=null && spec.Titles.Length==5 && jobTitle.Visible && jobTitle.Items.Count==5,"Ashita title combo");
+     Need(spec.Titles[1]=="主任" && spec.Titles[4]=="部長","Ashita title values");
+     Need(roleLabel.Visible && roleLabel.Text.IndexOf("ふりがな")>=0,"Ashita furigana field");
      role.Text="やまだ"; Need(LabelCatalog.SpaceFuriganaText(role.Text)=="や ま だ","Ashita space furigana");
      role.Text="や ま だ"; Need(LabelCatalog.SpaceFuriganaText(role.Text)=="や ま だ","Ashita no double space");
+     jobTitle.SelectedIndex=1; Need(LabelCatalog.DeptWithTitle(Current()).IndexOf(" ")>=0,"Ashita title join");
+     jobTitle.SelectedIndex=0;
+    }
+    if(row==253){
+     Need(LabelCatalog.Customers[spec.Customer].IndexOf("桜台")>=0,"Ashita foreign customer");
+     Need(spec.Layout=="DeptName" && spec.Reading=="カタカナ","Ashita foreign layout");
+     Need(spec.Titles!=null && spec.Titles.Length==5 && jobTitle.Visible && jobTitle.Items.Count==5,"Ashita foreign title combo");
+     Need(!roleLabel.Visible && !role.Visible,"Ashita foreign has no furigana Role");
+     Need(spec.UpperBandMm==12.8f && spec.LowerBandMm==37.2f,"Ashita foreign bands");
     }
     if(row==230){
      Need(spec.Layout=="Name","Rinko became single-line Name");
