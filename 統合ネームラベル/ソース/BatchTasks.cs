@@ -26,7 +26,7 @@ namespace UnifiedLabels
         public int Digits = 4;
         public int EmphasisStart = -1, EmphasisLength;
         public string ColorDepartment = "";
-        public string Header = "", Role = "", Person = "", Number = "";
+        public string Header = "", Role = "", Person = "", Number = "", Title = "";
         public float HeaderFontPt, RoleFontPt, PersonFontPt, NumberFontPt;
         public bool HeaderFontSet, RoleFontSet, PersonFontSet, NumberFontSet;
 
@@ -36,7 +36,7 @@ namespace UnifiedLabels
             return new LabelDataSnapshot {
                 Digits=d.Digits, EmphasisStart=d.EmphasisStart, EmphasisLength=d.EmphasisLength,
                 ColorDepartment=d.ColorDepartment??"", Header=d.Header??"", Role=d.Role??"",
-                Person=d.Person??"", Number=d.Number??"",
+                Person=d.Person??"", Number=d.Number??"", Title=d.Title??"",
                 HeaderFontPt=d.HeaderFontPt, RoleFontPt=d.RoleFontPt, PersonFontPt=d.PersonFontPt, NumberFontPt=d.NumberFontPt,
                 HeaderFontSet=d.HeaderFontSet, RoleFontSet=d.RoleFontSet, PersonFontSet=d.PersonFontSet, NumberFontSet=d.NumberFontSet
             };
@@ -46,7 +46,7 @@ namespace UnifiedLabels
             return new LabelData {
                 Digits=Digits, EmphasisStart=EmphasisStart, EmphasisLength=EmphasisLength,
                 ColorDepartment=ColorDepartment??"", Header=Header??"", Role=Role??"",
-                Person=Person??"", Number=Number??"",
+                Person=Person??"", Number=Number??"", Title=Title??"",
                 HeaderFontPt=HeaderFontPt, RoleFontPt=RoleFontPt, PersonFontPt=PersonFontPt, NumberFontPt=NumberFontPt,
                 HeaderFontSet=HeaderFontSet, RoleFontSet=RoleFontSet, PersonFontSet=PersonFontSet, NumberFontSet=NumberFontSet
             };
@@ -245,6 +245,7 @@ namespace UnifiedLabels
             n.SetAttribute("colorDept",s.ColorDepartment??"");
             n.SetAttribute("header",s.Header??"");
             n.SetAttribute("role",s.Role??"");
+            n.SetAttribute("title",s.Title??"");
             n.SetAttribute("person",s.Person??"");
             n.SetAttribute("number",s.Number??"");
             n.SetAttribute("hPt",s.HeaderFontPt.ToString(CultureInfo.InvariantCulture));
@@ -303,6 +304,7 @@ namespace UnifiedLabels
                 ColorDepartment=n.GetAttribute("colorDept"),
                 Header=n.GetAttribute("header"),
                 Role=n.GetAttribute("role"),
+                Title=n.GetAttribute("title"),
                 Person=n.GetAttribute("person"),
                 Number=n.GetAttribute("number"),
                 HeaderFontPt=ParseFloat(n.GetAttribute("hPt")),
@@ -526,15 +528,16 @@ namespace UnifiedLabels
     public static class BatchImport
     {
         public static readonly string[] TemplateHeaders=new string[] {
-            "顧客","形式","大/小","部署","区分","役職","氏名","番号","部数"
+            "顧客","形式","大/小","部署","区分","役職","ふりがな","氏名","番号","部数"
         };
 
         public static string TemplateCsv()
         {
             StringBuilder sb=new StringBuilder();
             sb.AppendLine(string.Join(",",TemplateHeaders));
-            sb.AppendLine("ふか河,小ネーム（フルネーム）,小,,日中,,山田 太郎,,1");
-            sb.AppendLine("ふか河,小ネーム（フルネーム）,小,,夜間,,佐藤 花子,,1");
+            // 列: 顧客,形式,大/小,部署,区分,役職,ふりがな,氏名,番号,部数
+            sb.AppendLine("ふか河,小ネーム（フルネーム）,小,,日中,,,山田 太郎,,1");
+            sb.AppendLine("ふか河,小ネーム（フルネーム）,小,,夜間,,,佐藤 花子,,1");
             return sb.ToString();
         }
 
@@ -621,6 +624,7 @@ namespace UnifiedLabels
                     string dept=Cell(row,map,"部署");
                     string group=Cell(row,map,"区分");
                     string role=Cell(row,map,"役職");
+                    string furigana=Cell(row,map,"ふりがな");
                     string person=Cell(row,map,"氏名");
                     string number=Cell(row,map,"番号");
                     string copiesText=Cell(row,map,"部数");
@@ -628,8 +632,15 @@ namespace UnifiedLabels
                         continue;
                     int kind=ResolveKind(customer,format,size);
                     if(kind<0) { result.Errors.Add("行"+displayRow+": 顧客・形式を特定できません（顧客="+customer+", 形式="+format+"）"); continue; }
+                    LabelSpec importSpec=LabelCatalog.Items[kind];
+                    // 明日佳・東苗穂など：役職＝肩書(Title)、ふりがな＝Role。旧CSV（ふりがな列なし）は役職をRoleのまま。
+                    string title="", roleValue=role;
+                    if(importSpec.Titles!=null) {
+                        title=role;
+                        roleValue=furigana!=""?furigana:"";
+                    } else if(furigana!="") roleValue=furigana;
                     LabelData d=new LabelData {
-                        Header=dept, Role=role, Person=person, Number=number,
+                        Header=dept, Role=roleValue, Title=title, Person=person, Number=number,
                         ColorDepartment=group, Digits=4
                     };
                     if(kind<2 && !string.IsNullOrEmpty(number) && number.Length>=6) d.Digits=5;
@@ -685,6 +696,7 @@ namespace UnifiedLabels
                     if(LabelCatalog.Customers[i].IndexOf(customer,StringComparison.Ordinal)>=0) { customerIndex=i; break; }
             }
             if(customerIndex<0) return -1;
+            if(LabelCatalog.IsHiddenCustomer(customerIndex)) return -1;
             int[] ids=LabelCatalog.ForCustomer(customerIndex);
             bool wantSmall=size.IndexOf("小",StringComparison.Ordinal)>=0;
             bool wantLarge=size.IndexOf("大",StringComparison.Ordinal)>=0;
@@ -807,7 +819,7 @@ namespace UnifiedLabels
             string csv=BatchImport.TemplateCsv()+"\n不正顧客,大ネーム,大,,,太郎,,1\n";
             BatchImportResult bad=BatchImport.FromRows(BatchImport.ParseDelimited(csv),null);
             if(!bad.HasErrors || bad.Tasks.Count!=0) throw new Exception("不正行黙認登録を検出");
-            string paste="顧客\t形式\t大/小\t部署\t区分\t役職\t氏名\t番号\t部数\nふか河\t小ネーム（フルネーム）\t小\t\t日中\t\t山田 太郎\t\t1\n";
+            string paste="顧客\t形式\t大/小\t部署\t区分\t役職\tふりがな\t氏名\t番号\t部数\nふか河\t小ネーム（フルネーム）\t小\t\t日中\t\t\t山田 太郎\t\t1\n";
             BatchImportResult ok=BatchImport.FromClipboardText(paste,null);
             if(ok.HasErrors || ok.Tasks.Count!=1) throw new Exception("貼付取込失敗: "+string.Join(";",ok.Errors.ToArray()));
             // 先頭ゼロ番号（石狩 4桁）
