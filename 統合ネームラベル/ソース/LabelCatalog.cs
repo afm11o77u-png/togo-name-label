@@ -13,13 +13,27 @@ namespace UnifiedLabels
         public int SourceRow, NumberLength, PreviousSourceRow;
         public string FixedColor="", Reading="", HeaderFamily="", NumberPrefix="", Pending="", ColorCaption="区分";
         public string[] Groups=new string[0], Colors=new string[0], Departments;
+        /// <summary>任意役職の選択肢（部署横に併記。ふりがな Role とは別）。空要素＝未選択可。</summary>
+        public string[] Titles;
+        /// <summary>期生色の1始まり対応表。null＝Groups/Colorsの周期。空文字＝未設定。</summary>
+        public string[] CohortColors;
         public bool SurnameOnly, SpaceSurname, StrictFont;
         public bool SurnameSizing, ColorFromDepartment, UnknownSize, IndentUpper;
+        /// <summary>当該形式だけ MS PGothic 等を太字にする（StyleFor のファミリ一律変更はしない）。</summary>
+        public bool ForceBold;
+        /// <summary>ふりがなを1文字ずつ半角スペース区切りで印字（既に空白がある場合は二重挿入しない）。</summary>
+        public bool SpaceFurigana;
+        /// <summary>カタカナ入力のみ受け付ける（漢字印字なしの案内・検証）。</summary>
+        public bool KatakanaOnly;
+        /// <summary>顧客選択肢から除外（契約終了・重複統合）。インデックスと SettingsIdentity は維持。</summary>
+        public bool HiddenCustomer;
         public float MiddleNudge;
         // 段サイズ（仕分けExcel）：帯高さmm。0＝サイズ既定（大25/25・小は従来7/14）。
-        public float UpperBandMm, LowerBandMm;
+        public float UpperBandMm, MiddleBandMm, LowerBandMm;
         // 帯内の上下揃え（アプリ座標）。既定は中央。
-        public StringAlignment UpperLineAlign=StringAlignment.Center, LowerLineAlign=StringAlignment.Center;
+        public StringAlignment UpperLineAlign=StringAlignment.Center, MiddleLineAlign=StringAlignment.Center, LowerLineAlign=StringAlignment.Center;
+        // 中・下段の左右揃え（上段は IndentUpper）。
+        public StringAlignment MiddleAlign=StringAlignment.Center, LowerAlign=StringAlignment.Center;
         public string ColorGuide="", InputCaption="", SettingsIdentity="";
         // Legacy, Name, Surname, HeadingName, NumberName, SplitNumber
         public string Layout;
@@ -71,6 +85,57 @@ namespace UnifiedLabels
                 return FontStyle.Bold;
             return FontStyle.Regular;
         }
+        public static FontStyle StyleFor(LabelSpec s) {
+            if(s!=null && s.ForceBold) return FontStyle.Bold;
+            return StyleFor(s==null?null:s.Family);
+        }
+        public static FontStyle StyleForHeader(LabelSpec s) {
+            string family=s!=null && s.HeaderFamily!=""?s.HeaderFamily:(s==null?null:s.Family);
+            // 布目など：上段は通常、下段のみ太字（ForceBold は氏名側のみ）。
+            if(s!=null && s.ForceBold && (s.HeaderFamily=="" || s.HeaderFamily==s.Family)) return FontStyle.Bold;
+            return StyleFor(family);
+        }
+        /// <summary>部署＋任意役職の印字文言。役職があるときだけ半角スペースで併記。</summary>
+        public static string DeptWithTitle(LabelData d) {
+            string dept=(d.Header??"").Replace('　',' ').Trim();
+            string title=(d.Title??"").Replace('　',' ').Trim();
+            if(title=="") return dept;
+            if(dept=="") return title;
+            return dept+" "+title;
+        }
+        /// <summary>ふりがなを1文字ずつ半角スペース区切り。既存空白は壊さない。</summary>
+        public static string SpaceFuriganaText(string value) {
+            if(string.IsNullOrEmpty(value)) return "";
+            string t=value.Replace('　',' ').Trim();
+            if(t.IndexOf(' ')>=0) return t; // 既に区切りあり→二重挿入しない
+            var sb=new System.Text.StringBuilder();
+            foreach(char c in t) {
+                if(char.IsWhiteSpace(c)) continue;
+                if(sb.Length>0) sb.Append(' ');
+                sb.Append(c);
+            }
+            return sb.ToString();
+        }
+        static bool IsKatakanaText(string value) {
+            if(string.IsNullOrWhiteSpace(value)) return false;
+            foreach(char c in value.Normalize(System.Text.NormalizationForm.FormKC)) {
+                if(char.IsWhiteSpace(c) || c=='ー' || c=='-' || c=='･' || c=='・') continue;
+                // カタカナ・半角カタカナのみ
+                if(c>=0x30A0 && c<=0x30FF) continue;
+                if(c>=0xFF66 && c<=0xFF9F) continue;
+                return false;
+            }
+            return true;
+        }
+        /// <summary>顧客選択肢から除外する（契約終了・重複統合）。配列位置は維持。</summary>
+        public static bool IsHiddenCustomer(int customer) {
+            if(customer<0 || customer>=Customers.Length) return true;
+            string name=Customers[customer];
+            return name=="ホワイトファーム" || name=="あすかHOUSE" || name=="日綜中垣病院";
+        }
+        public static bool IsHiddenCustomerName(string name) {
+            return name=="ホワイトファーム" || name=="あすかHOUSE" || name=="日綜中垣病院";
+        }
         public static readonly string[] Customers=CreateCustomers();
         public static string[] DepartmentNames(int kind) {
             if(Items[kind].Departments!=null) return Items[kind].Departments;
@@ -105,12 +170,32 @@ namespace UnifiedLabels
         public static string[] GroupColors(int kind) { return Items[kind].Colors; }
         public static string SelectedGroup(int kind,LabelData d) {
             if(Items[kind].ColorFromDepartment) return d.Header;
-            if(Items[kind].Layout=="CohortName") { int n; return Int32.TryParse(d.Role,out n) && n>0?Items[kind].Groups[(n-1)%4]:""; }
+            if(Items[kind].Layout=="CohortName") {
+                int n; if(!Int32.TryParse(d.Role,out n) || n<1) return "";
+                LabelSpec cs=Items[kind];
+                if(cs.CohortColors!=null) {
+                    if(n>cs.CohortColors.Length) return "";
+                    string color=cs.CohortColors[n-1]??"";
+                    if(color=="") return "";
+                    // 凡例用 Groups に同じ色の代表名があればそれを返す
+                    string[] cols=GroupColors(kind);
+                    for(int i=0;i<cols.Length;i++) if(cols[i]==color) return ColorGroups(kind)[i];
+                    return n+"期生";
+                }
+                if(cs.Groups.Length==0) return "";
+                return cs.Groups[(n-1)%cs.Groups.Length];
+            }
             return d.ColorDepartment;
         }
         public static string ColorName(int kind,LabelData d)
         {
             if(Items[kind].Layout=="DeptOnly" && Items[kind].FixedColor=="緑？")return d.Header.Replace(" ","").Replace("　","")=="鮮魚"?"緑？":"先方から指定";
+            if(Items[kind].Layout=="CohortName" && Items[kind].CohortColors!=null) {
+                int n; if(!Int32.TryParse(d.Role,out n) || n<1) return "未指定";
+                if(n>Items[kind].CohortColors.Length) return "未指定";
+                string c=Items[kind].CohortColors[n-1]??"";
+                return c==""?"未指定":c;
+            }
             if(Items[kind].FixedColor!="") return Items[kind].FixedColor;
             string[] groups=ColorGroups(kind);
             // 未選択は「未指定」（白ラベル指定とは別。Swatch は中立の白背景のみ）
@@ -196,16 +281,25 @@ namespace UnifiedLabels
             LabelSpec s=Items[kind];
             if(s.Pending!="") return "要確認："+s.Pending;
             if(s.Layout=="Blank") return "無地ラベルです。印字せず、ガイドどおり切り分けて使用してください。";
+            if(IsHiddenCustomer(s.Customer)) return "この顧客は選択肢から除外されています。";
+            // Unavailable は設定互換用の旧形式。印字対象外だが既存検証では入力なしで通す。
             if(s.Layout=="QR") return LabelRenderer.Validate(3,d);
             if(DepartmentNames(kind)!=null && String.IsNullOrWhiteSpace(d.Header)) return "部署を選択してください。";
             string[] groups=ColorGroups(kind);
             // 色確認専用の Groups は任意。印字に使う区分（サイズ・期生・部署連動色）だけ必須。
-            if(groups.Length>0 && ColorGroupAffectsPrint(kind) && Array.IndexOf(groups,SelectedGroup(kind,d))<0)
+            if(s.Layout=="CohortName" && s.CohortColors!=null) {
+                int cn; if(!Int32.TryParse(d.Role,out cn) || cn<1) return "期生を半角数字で入力してください。";
+                if(cn>s.CohortColors.Length || string.IsNullOrEmpty(s.CohortColors[cn-1]))
+                    return "この期生の色は未設定です。色指定を確認してください。";
+            } else if(groups.Length>0 && ColorGroupAffectsPrint(kind) && Array.IndexOf(groups,SelectedGroup(kind,d))<0)
                 return s.Layout=="CohortName"?"期生を半角数字で入力してください。":"区分を選択してラベルの色を確認してください。";
             if(s.NeedsName && String.IsNullOrWhiteSpace(d.Person)) return s.Layout=="Surname"?"苗字を入力してください。":"名前を入力してください。";
+            if(s.KatakanaOnly && !String.IsNullOrWhiteSpace(d.Person) && !IsKatakanaText(d.Person))
+                return "カタカナで入力してください（漢字では印字しません）。";
             if(s.Layout=="DeptOnly" && String.IsNullOrWhiteSpace(d.Header))return "印字する部署名を入力してください。";
             if(s.Layout=="DeptFurigana" && String.IsNullOrWhiteSpace(d.Role))return "苗字のふりがなをひらがなで入力してください。";
             if(s.Layout=="DeptFurigana" && s.Departments==null && String.IsNullOrWhiteSpace(d.Header))return "部署名を入力してください。";
+            if(s.Layout=="RoleName" && s.Reading=="ローマ字" && String.IsNullOrWhiteSpace(d.Role))return "カタカナ氏名を入力してください。";
             if(s.Layout=="StarRoman") {
                 int stars;if(!Int32.TryParse(d.Role,out stars)||stars<0||stars>99)return "☆の数を0～99で入力してください。";
                 if(String.IsNullOrWhiteSpace(d.Header))return "苗字のローマ字を入力してください。";
@@ -249,7 +343,14 @@ namespace UnifiedLabels
         public static float DefaultPersonPt(LabelSpec s,LabelData d) {
             string name=NameForPrint(s,d.Person);
             if(s.Layout=="InitialMixed") return String.IsNullOrWhiteSpace(d.Role)?104:80;
-            if(s.SurnameSizing) return !String.IsNullOrWhiteSpace(d.Role)?56:name.Length<=2?80:64;
+            // GOOD NEWS 大など：2文字80／3文字64／4文字以降は MaximumFont(上限)へフィット
+            if(s.SurnameSizing) {
+                if(!String.IsNullOrWhiteSpace(d.Role) && s.Layout!="Surname" && !s.SurnameOnly) return 56;
+                int n=name.Replace(" ","").Replace("　","").Length;
+                if(n<=2) return 80;
+                if(n==3) return 64;
+                return s.MaximumFont>0?s.MaximumFont:48;
+            }
             if(s.MaximumFont>0) return s.MaximumFont;
             if(s.Layout=="Surname" && !s.SurnameOnly) return 36;
             if(s.Layout=="StarRoman") return 50;
@@ -435,17 +536,22 @@ namespace UnifiedLabels
                 Line(g,lines[1],s.Family,fl,28,false,StringAlignment.Center,s.LowerLineAlign); return;
             }
             float maximum=s.MaximumFont>0?s.MaximumFont:(s.Layout=="Surname" && !s.SurnameOnly?36:GenericSize(s.Small,name));
-            if(s.SurnameSizing)maximum=!String.IsNullOrWhiteSpace(d.Role)?56:name.Length<=2?80:64;
+            if(s.SurnameSizing) {
+                int sn=name.Replace(" ","").Replace("　","").Length;
+                maximum=sn<=2?80:sn==3?64:(s.MaximumFont>0?s.MaximumFont:48);
+            }
             maximum=PickFont(maximum,d.PersonFontSet,d.PersonFontPt);
             float heading=PickFont(s.HeadingFont>0?s.HeadingFont:(s.Small?18:26),d.HeaderFontSet,d.HeaderFontPt);
             float rolePt=PickFont(DefaultRolePt(s),d.RoleFontSet,d.RoleFontPt);
             float numberPt=PickFont(DefaultNumberPt(s,d),d.NumberFontSet,d.NumberFontPt);
             StringAlignment upperAlign=s.IndentUpper?StringAlignment.Near:StringAlignment.Center;
+            FontStyle bodyStyle=StyleFor(s);
+            FontStyle headerStyle=StyleForHeader(s);
             RectangleF upper, lower; TwoRowBands(s,mm,out upper,out lower);
             if(s.Layout=="DeptOnly"){
                 string dept=d.Header.Replace('　',' ');
                 float deptMax=s.MaximumFont>0?s.MaximumFont:GenericSize(s.Small,dept);
-                Line(g,dept,s.Family,Mm(1,1,mm.Width-2,mm.Height-2),PickFont(deptMax,d.HeaderFontSet,d.HeaderFontPt));return;
+                Line(g,dept,s.Family,bodyStyle,Mm(1,1,mm.Width-2,mm.Height-2),PickFont(deptMax,d.HeaderFontSet,d.HeaderFontPt));return;
             }
             if(s.Layout=="DeptRoleName") {
                 Line(g,d.Header,s.Family,Mm(1,3,78,10),heading,false,upperAlign);
@@ -453,9 +559,23 @@ namespace UnifiedLabels
                 Line(g,name,s.Family,Mm(1,27,78,22),maximum);return;
             }
             if(s.Layout=="DeptFurigana") {
-                Line(g,d.Header,s.Family,Mm(1,2,78,10),heading,false,upperAlign);
-                Line(g,d.Role,s.Family,Mm(1,14,78,10),rolePt);
-                Line(g,name,s.Family,Mm(1,25,78,24),maximum);return;
+                string top=DeptWithTitle(d);
+                string furi=s.SpaceFurigana?SpaceFuriganaText(d.Role):d.Role.Replace('　',' ');
+                float uh=s.UpperBandMm>0?s.UpperBandMm:12.8f;
+                float mh=s.MiddleBandMm>0?s.MiddleBandMm:12.5f;
+                float lh=s.LowerBandMm>0?s.LowerBandMm:24.7f;
+                // 帯未指定の既存形式は従来座標を維持
+                if(s.UpperBandMm<=0 && s.MiddleBandMm<=0 && s.LowerBandMm<=0) {
+                    Line(g,top,s.Family,Mm(1,2,78,10),heading,false,upperAlign);
+                    Line(g,furi,s.Family,Mm(1,14,78,10),rolePt);
+                    Line(g,name,s.Family,Mm(1,25,78,24),maximum);return;
+                }
+                RectangleF bu=Mm(1,0,mm.Width-2,uh);
+                RectangleF bm=Mm(1,uh,mm.Width-2,mh);
+                RectangleF bl=Mm(1,uh+mh,mm.Width-2,lh);
+                Line(g,top,s.Family,headerStyle,bu,heading,false,upperAlign,s.UpperLineAlign);
+                Line(g,furi,s.Family,bodyStyle,bm,rolePt,false,s.MiddleAlign,s.MiddleLineAlign);
+                Line(g,name,s.Family,bodyStyle,bl,maximum,false,s.LowerAlign,s.LowerLineAlign);return;
             }
             if(s.Layout=="StarRoman") {
                 int stars;if(!Int32.TryParse(d.Role,out stars))stars=0;stars=Math.Max(0,Math.Min(99,stars));
@@ -465,9 +585,9 @@ namespace UnifiedLabels
             }
             if(s.Layout=="OptionalHeading" && !String.IsNullOrWhiteSpace(d.Header)){
                 Line(g,d.Header,s.Family,upper,heading,false,upperAlign,s.UpperLineAlign);
-                Line(g,name,s.Family,lower,maximum,false,StringAlignment.Center,s.LowerLineAlign);return;
+                Line(g,name,s.Family,bodyStyle,lower,maximum,false,StringAlignment.Center,s.LowerLineAlign);return;
             }
-            if(s.Layout=="SplitCode") { DrawSplitSides(g,name,s.Family,maximum); return; }
+            if(s.Layout=="SplitCode") { DrawSplitSides(g,name,s.Family,maximum,bodyStyle); return; }
             if(s.Layout=="DeptName" || s.Layout=="DeptNumberName") {
                 if(s.Layout=="DeptNumberName") {
                     float uy, uh;
@@ -476,12 +596,18 @@ namespace UnifiedLabels
                     else { uy=LargeTwoRowUpperYMm; uh=LargeTwoRowUpperHeightMm; }
                     Line(g,d.Header.Replace('　',' '),s.Family,Mm(1,uy,(mm.Width-3)/2f,uh),heading,false,upperAlign,s.UpperLineAlign);
                     Line(g,d.Number,s.Family,Mm(mm.Width/2f+0.5f,uy,(mm.Width-3)/2f,uh),numberPt,false,upperAlign,s.UpperLineAlign);
-                } else Line(g,d.Header.Replace('　',' '),s.Family,upper,heading,false,upperAlign,s.UpperLineAlign);
-                Line(g,name,s.Family,lower,maximum,s.StrictFont,StringAlignment.Center,s.LowerLineAlign); return;
+                } else {
+                    string deptLine=s.Titles!=null?DeptWithTitle(d):d.Header.Replace('　',' ');
+                    Line(g,deptLine,s.Family,upper,heading,false,upperAlign,s.UpperLineAlign);
+                }
+                Line(g,name,s.Family,bodyStyle,lower,maximum,s.StrictFont,StringAlignment.Center,s.LowerLineAlign); return;
             }
-            if(s.Layout=="RoleName" && !String.IsNullOrWhiteSpace(d.Role)) {
-                Line(g,d.Role,s.Family,upper,rolePt,false,upperAlign,s.UpperLineAlign);
-                Line(g,name,s.Family,lower,maximum,false,StringAlignment.Center,s.LowerLineAlign); return;
+            if(s.Layout=="RoleName") {
+                if(!String.IsNullOrWhiteSpace(d.Role)) {
+                    Line(g,d.Role,s.Family,bodyStyle,upper,rolePt,false,upperAlign,s.UpperLineAlign);
+                    Line(g,name,s.Family,bodyStyle,lower,maximum,false,StringAlignment.Center,s.LowerLineAlign);
+                } else Line(g,name,s.Family,bodyStyle,Mm(1,1,mm.Width-2,mm.Height-2),maximum);
+                return;
             }
             if(s.Layout=="RepeatName" || s.Layout=="NameParts") {
                 string first=name,second=name;
@@ -519,14 +645,15 @@ namespace UnifiedLabels
                 float topPt=s.HeadingFont>0?s.HeadingFont:s.Layout=="HeadingName"?12:18;
                 if(s.Layout=="HeadingName") topPt=PickFont(topPt,d.HeaderFontSet,d.HeaderFontPt);
                 if(s.Layout=="NumberName" || s.Layout=="CompanyCodeName") topPt=PickFont(topPt,d.NumberFontSet,d.NumberFontPt);
-                Line(g,top,s.HeaderFamily!=""?s.HeaderFamily:s.Family,upper,topPt,false,upperAlign,s.UpperLineAlign);
-                Line(g,name,s.Family,lower,maximum,s.StrictFont,StringAlignment.Center,s.LowerLineAlign);
+                string topFamily=s.HeaderFamily!=""?s.HeaderFamily:s.Family;
+                Line(g,top,topFamily,StyleFor(topFamily),upper,topPt,false,upperAlign,s.UpperLineAlign);
+                Line(g,name,s.Family,bodyStyle,lower,maximum,s.StrictFont,StringAlignment.Center,s.LowerLineAlign);
             } else if(s.Layout=="SplitNumber") {
-                DrawSplitSides(g,d.Number,s.Family,numberPt);
+                DrawSplitSides(g,d.Number,s.Family,numberPt,bodyStyle);
             } else if(s.Layout=="NumberOnly" || s.Layout=="SizeNumber") {
-                Line(g,name,s.Family,Mm(1,1,mm.Width-2,mm.Height-2),numberPt);
+                Line(g,name,s.Family,bodyStyle,Mm(1,1,mm.Width-2,mm.Height-2),numberPt);
             } else {
-                Line(g,name,s.Family,Mm(1,1,mm.Width-2,mm.Height-2),maximum,s.StrictFont,s.IndentUpper && s.Layout=="Surname"?StringAlignment.Near:StringAlignment.Center);
+                Line(g,name,s.Family,bodyStyle,Mm(1,1,mm.Width-2,mm.Height-2),maximum,s.StrictFont,s.IndentUpper && s.Layout=="Surname"?StringAlignment.Near:StringAlignment.Center,StringAlignment.Center);
             }
         }
         public static float GenericSize(bool small,string name) {

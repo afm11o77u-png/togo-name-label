@@ -159,6 +159,7 @@ namespace UnifiedLabels {
 {"十勝大福本舗㈱","とかちだいふくほんぽ"},
 {"日鉄FT","にってつえふてぃー"},
 {"北のアトリエ","きたのあとりえ"},
+{"札幌/桜台/白石/岩見沢/宮の沢明日佳","さっぽろさくらだいしろいしいわみざわみやのさわあすか"},
 {"札幌/白石/岩見沢/宮の森明日佳","さっぽろしろいしいわみざわみやのもりあすか"},
 {"柳月","りゅうげつ"},
 {"鱗幸食品","りんこうしょくひん"},
@@ -207,6 +208,7 @@ namespace UnifiedLabels {
 {"エフケー","えふけー"},
 {"ホクレン鶏卵流通センター札幌","ほくれんけいらんりゅうつうせんたーさっぽろ"},
 {"ホクレン鶏卵流通センター旭川","ほくれんけいらんりゅうつうせんたーあさひかわ"},
+{"札幌健診センター/札幌きたはち健診センター（健診衣）","さっぽろけんしんせんたーきたはち"},
 {"札幌健診センター","さっぽろけんしんせんたー"},
 {"札幌中一","さっぽろなかいち"},
 {"エア・ウォーター・アグリ 更別工場/札幌工場","えあうぉーたーあぐりせつべつこうじょうさっぽろこうじょう"},
@@ -214,7 +216,15 @@ namespace UnifiedLabels {
 {"ベル・クール研究所","べるくーるけんきゅうじょ"}
   };
   public static string CustomerReading(string name){string reading;return CustomerReadings.TryGetValue(name,out reading)?reading:name;}
-  public static string[] SortedCustomers(){var names=(string[])Customers.Clone();var comparer=CultureInfo.GetCultureInfo("ja-JP").CompareInfo;Array.Sort(names,delegate(string a,string b){int n=comparer.Compare(CustomerReading(a),CustomerReading(b),CompareOptions.IgnoreWidth|CompareOptions.IgnoreKanaType);return n!=0?n:comparer.Compare(a,b);});return names;}
+  public static string[] SortedCustomers(){
+   var visible=new List<string>();
+   foreach(string name in Customers) if(!IsHiddenCustomerName(name)) visible.Add(name);
+   var names=visible.ToArray();
+   var comparer=CultureInfo.GetCultureInfo("ja-JP").CompareInfo;
+   Array.Sort(names,delegate(string a,string b){int n=comparer.Compare(CustomerReading(a),CustomerReading(b),CompareOptions.IgnoreWidth|CompareOptions.IgnoreKanaType);return n!=0?n:comparer.Compare(a,b);});
+   return names;
+  }
+  public static int VisibleCustomerCount(){int n=0; foreach(string name in Customers) if(!IsHiddenCustomerName(name)) n++; return n;}
  }
  public sealed class OffsetDialog:Form {
   readonly NumericUpDown x=new NumericUpDown(),y=new NumericUpDown();readonly PictureBox picture=new PictureBox();readonly Func<PrintOffset,Bitmap> render;public PrintOffset Value {get{return new PrintOffset(x.Value,y.Value);}}

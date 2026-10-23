@@ -14,6 +14,8 @@ namespace UnifiedLabels
         public int EmphasisStart = -1, EmphasisLength;
         public string ColorDepartment = "";
         public string Header = "", Role = "", Person = "", Number = "";
+        /// <summary>部署横に併記する任意役職（ふりがな用 Role とは別。明日佳・東苗穂など）。</summary>
+        public string Title = "";
         // 欄ごとのフォントサイズ(pt)。*FontSet=false または無効値ならカタログ／自動調整の既定を使う。
         public float HeaderFontPt, RoleFontPt, PersonFontPt, NumberFontPt;
         public bool HeaderFontSet, RoleFontSet, PersonFontSet, NumberFontSet;
@@ -122,6 +124,9 @@ namespace UnifiedLabels
         readonly ComboBox kinds = new ComboBox(), printers = new ComboBox(), papers = new ComboBox();
         readonly ComboBox department = new ComboBox();
         readonly ComboBox colorDepartment = new ComboBox();
+        /// <summary>部署横の任意役職（ふりがな Role とは別）。Titles 付き形式のみ表示。</summary>
+        readonly ComboBox jobTitle = new ComboBox();
+        readonly Label jobTitleLabel = new Label();
         readonly Label sampleColor = new Label();
         // 色帯は最大6枚（3行×2列）。鱗幸など赤・緑・青・白・黄の5色凡例を表示するため4枚から拡張。
         readonly Label[] colorLegend = {new Label(),new Label(),new Label(),new Label(),new Label(),new Label()};
@@ -150,8 +155,12 @@ namespace UnifiedLabels
         void ApplyCustomerSelection() {
             if(SelectedCustomerIndex<0) return;
             int customer=SelectedCustomerIndex;
+            if(LabelCatalog.IsHiddenCustomer(customer)) return;
             int[] ids=LabelCatalog.ForCustomer(customer);
-            int next=ids[lastFormats[customer]];
+            if(ids.Length==0) return;
+            int fmt=lastFormats[customer];
+            if(fmt<0 || fmt>=ids.Length) fmt=0;
+            int next=ids[fmt];
             if(kinds.SelectedIndex!=next) kinds.SelectedIndex=next;
             else SwitchKind();
             Safe(delegate {preferences.Visit(customers.Text);});
@@ -262,6 +271,9 @@ public MainForm(string settingsFile)
             preferences.RenameCustomer("弁釜札幌","弁釜本社/札幌/八軒/旭川/函館/ローズD/");
             preferences.RenameCustomer("よつ葉根釧工場","よつ葉根釧/宗谷工場");
             preferences.RenameCustomer("コープフーズ石狩食品工場","コープフーズ / 石狩食品工場");
+            preferences.RenameCustomer("札幌/白石/岩見沢/宮の森明日佳","札幌/桜台/白石/岩見沢/宮の沢明日佳");
+            preferences.RenameCustomer("札幌健診センター","札幌健診センター/札幌きたはち健診センター（健診衣）");
+            preferences.RenameCustomer("日綜中垣病院","日総中垣病院");
             for(int i=0;i<drafts.Length;i++) drafts[i]=new LabelData {Header=LabelCatalog.Items[i].Heading};
             Text = "統合ネームラベル"; Font = new Font("Yu Gothic UI", 9);
             AutoScaleMode = AutoScaleMode.Dpi; ClientSize = new Size(FormClientWidth, FormClientHeight);
@@ -283,6 +295,8 @@ public MainForm(string settingsFile)
             headerLabel.Text="会社名 / 部署"; Field(headerLabel,LeftX,HeaderLabelTop,300); Field(header,LeftX,HeaderFieldTop,FieldWidth);
             department.DropDownStyle=ComboBoxStyle.DropDownList; department.Items.AddRange(new object[] {"製造課 冷食", "製造課 ハムソー", "工務課", "商品開発課", "生産管理課", "総務課", "調達課", "品質保証部"}); Field(department,LeftX,HeaderFieldTop,FieldWidth); department.Visible=false;
             colorDepartment.DropDownStyle=ComboBoxStyle.DropDownList; colorDepartment.Items.AddRange(LabelCatalog.ColorDepartments); Field(colorDepartment,LeftX,HeaderFieldTop,FieldWidth); colorDepartment.Visible=false;
+            jobTitleLabel.Text="役職（任意）"; Field(jobTitleLabel,LeftX,RoleLabelTop,300); jobTitleLabel.Visible=false;
+            jobTitle.DropDownStyle=ComboBoxStyle.DropDownList; Field(jobTitle,LeftX,RoleFieldTop,FieldWidth); jobTitle.Visible=false;
             roleLabel.Text="役職"; Field(roleLabel,LeftX,RoleLabelTop,300); Field(role,LeftX,RoleFieldTop,FieldWidth);
             personLabel.Text="名前"; Field(personLabel,LeftX,PersonLabelTop,300); Field(person,LeftX,PersonFieldTop,FieldWidth); person.MaxLength=20;
             // 氏名欄の直下。既存の全角→半角変換（Current / LabelRenderer）と同じ趣旨。
@@ -406,6 +420,7 @@ public MainForm(string settingsFile)
             department.SelectedIndexChanged += delegate { if(!changing) {if(active>=0 && LabelCatalog.Items[active].ColorFromDepartment){UpdateNumberGuide();Safe(UpdateSample);}UpdatePreview();} };
             colorDepartment.SelectedIndexChanged += delegate { if(!changing && active>=0) { UpdateNumberGuide(); Safe(UpdateSample); UpdatePreview(); } };
             foreach (TextBox box in new TextBox[] {header,role,person,number}) box.TextChanged += delegate { if(!changing) { if(active>=0 && (LabelCatalog.Items[active].Layout=="CohortName" || LabelCatalog.Items[active].Layout=="DeptOnly")) {UpdateNumberGuide(); Safe(UpdateSample);} RefreshUnsetFontDefaults(); UpdatePreview(); } };
+            jobTitle.SelectedIndexChanged += delegate { if(!changing) { if(active>=0) drafts[active].Title=jobTitle.Text??""; UpdatePreview(); } };
             headerFont.ValueChanged += delegate { if(changing || active<0) return; drafts[active].HeaderFontSet=true; drafts[active].HeaderFontPt=(float)headerFont.Value; UpdatePreview(); };
             roleFont.ValueChanged += delegate { if(changing || active<0) return; drafts[active].RoleFontSet=true; drafts[active].RoleFontPt=(float)roleFont.Value; UpdatePreview(); };
             personFont.ValueChanged += delegate { if(changing || active<0) return; drafts[active].PersonFontSet=true; drafts[active].PersonFontPt=(float)personFont.Value; UpdatePreview(); };
@@ -458,8 +473,8 @@ public MainForm(string settingsFile)
         }
         void BringInputRowsToFront() {
             // ラベル背景が入力欄を覆って潰れて見えるのを防ぐ（会社名行が典型）。
-            foreach(Control c in new Control[]{headerLabel,roleLabel,personLabel,numberLabel}) c.SendToBack();
-            foreach(Control c in new Control[]{header,role,person,number,department,colorDepartment,
+            foreach(Control c in new Control[]{headerLabel,roleLabel,jobTitleLabel,personLabel,numberLabel}) c.SendToBack();
+            foreach(Control c in new Control[]{header,role,person,number,department,colorDepartment,jobTitle,
                 headerFont,roleFont,personFont,numberFont,headerFontUnit,roleFontUnit,personFontUnit,numberFontUnit})
                 c.BringToFront();
         }
@@ -486,6 +501,14 @@ public MainForm(string settingsFile)
                 y = colorDepartment.Bottom + AfterFieldGap;
             } else if(headerLabel.Visible && !sizeNumber) {
                 y += FieldHeight + AfterFieldGap;
+            }
+
+            if(jobTitle.Visible || jobTitleLabel.Visible) {
+                if(jobTitleLabel.Visible) { jobTitleLabel.Top = y; y += CaptionToField; }
+                if(jobTitle.Visible) {
+                    jobTitle.Top = y; EnsurePreferredHeight(jobTitle);
+                    y = jobTitle.Bottom + AfterFieldGap;
+                } else y += AfterFieldGap;
             }
 
             if(sizeNumber) {
@@ -584,6 +607,7 @@ public MainForm(string settingsFile)
             LabelData d=new LabelData {
                 Header=(LabelCatalog.DepartmentNames(active)!=null?department.Text:header.Text).Replace('　',' '),
                 Role=role.Text.Replace('　',' '), Person=person.Text.Replace('　',' '), Number=number.Text.Replace('　',' '),
+                Title=jobTitle.Visible?(jobTitle.Text??"").Replace('　',' '):(drafts[active].Title??""),
                 Digits=digits.SelectedIndex==1?5:4,
                 ColorDepartment=LabelCatalog.ColorGroups(active).Length>0?colorDepartment.Text:drafts[active].ColorDepartment,
                 EmphasisStart=emphasisStart, EmphasisLength=emphasisLength,
@@ -619,9 +643,9 @@ public MainForm(string settingsFile)
                     drafts[id].NumberFontSet=drafts[active].NumberFontSet; drafts[id].NumberFontPt=drafts[active].NumberFontPt;
                     if(String.Join("|",LabelCatalog.ColorGroups(active))==String.Join("|",LabelCatalog.ColorGroups(id))) drafts[id].ColorDepartment=drafts[active].ColorDepartment;
                     drafts[id].EmphasisStart=drafts[active].EmphasisStart; drafts[id].EmphasisLength=drafts[active].EmphasisLength;
-                    if(LabelCatalog.DepartmentNames(active)!=null && LabelCatalog.DepartmentNames(id)!=null) { drafts[id].Header=drafts[active].Header; drafts[id].Role=drafts[active].Role; }
+                    if(LabelCatalog.DepartmentNames(active)!=null && LabelCatalog.DepartmentNames(id)!=null) { drafts[id].Header=drafts[active].Header; drafts[id].Role=drafts[active].Role; drafts[id].Title=drafts[active].Title; }
                     if(LabelCatalog.Items[active].Layout==LabelCatalog.Items[id].Layout) {
-                        drafts[id].Role=drafts[active].Role;
+                        drafts[id].Role=drafts[active].Role; drafts[id].Title=drafts[active].Title;
                         drafts[id].HeaderFontSet=drafts[active].HeaderFontSet; drafts[id].HeaderFontPt=drafts[active].HeaderFontPt;
                         drafts[id].RoleFontSet=drafts[active].RoleFontSet; drafts[id].RoleFontPt=drafts[active].RoleFontPt;
                         if(LabelCatalog.Items[active].Layout=="DeptNumberName" || LabelCatalog.Items[active].Layout=="OptionalHeading" || LabelCatalog.Items[active].Layout=="StarRoman") drafts[id].Header=drafts[active].Header;
@@ -656,6 +680,17 @@ public MainForm(string settingsFile)
             if(spec.Layout=="InitialName" || spec.Layout=="InitialMixed") { role.Visible=roleLabel.Visible=true; roleLabel.Text="名前の1文字目（同姓の方のみ）"; role.MaxLength=1; }
             if(spec.Layout=="CohortName") { role.Visible=roleLabel.Visible=true; roleLabel.Text="期生（例：5）"; role.MaxLength=3; }
             if(spec.Layout=="DeptFurigana") {role.Visible=roleLabel.Visible=true;roleLabel.Text="苗字のふりがな（ひらがな）";role.MaxLength=40; if(departments==null){header.Visible=headerLabel.Visible=true;header.ReadOnly=false;header.MaxLength=40;header.Text=d.Header;headerLabel.Text="部署名";}}
+            if(spec.Layout=="RoleName" && spec.Reading=="ローマ字") { role.Visible=roleLabel.Visible=true; roleLabel.Text="カタカナ氏名"; role.MaxLength=40; }
+            // 任意役職コンボ（ふりがな Role と独立）。空要素＝未選択。
+            jobTitle.Items.Clear(); jobTitle.Visible=jobTitleLabel.Visible=false;
+            if(spec.Titles!=null && spec.Titles.Length>0) {
+                jobTitle.Items.AddRange(spec.Titles);
+                jobTitle.Visible=jobTitleLabel.Visible=true;
+                jobTitleLabel.Text="役職（任意・入力時のみ部署横に表示）";
+                string want=(d.Title??"").Trim();
+                int ti=0; for(int i=0;i<spec.Titles.Length;i++) if(spec.Titles[i]==want) { ti=i; break; }
+                jobTitle.SelectedIndex=ti;
+            }
             if(spec.Layout=="StarRoman") {header.Visible=headerLabel.Visible=true;header.ReadOnly=false;header.MaxLength=100;header.Text=d.Header;headerLabel.Text="苗字（ローマ字）";role.Visible=roleLabel.Visible=true;roleLabel.Text="☆の数（なし＝0）";role.MaxLength=2;if(role.Text=="")role.Text="0";}
             if(spec.Layout=="DeptOnly" || spec.Layout=="OptionalHeading") {header.Visible=headerLabel.Visible=true;header.ReadOnly=false;header.MaxLength=40;header.Text=d.Header;headerLabel.Text=spec.Layout=="DeptOnly"?"部署名（印字する内容）":"部署名（空欄なら氏名のみ）";}
             if(spec.Layout=="DeptNumberName") { header.Visible=headerLabel.Visible=true; header.ReadOnly=false; header.MaxLength=30; header.Text=d.Header; headerLabel.Text="部署（印字する内容）"; }
@@ -813,7 +848,7 @@ public MainForm(string settingsFile)
             if(spec.Reading=="半角カタカナ")example.Person="ﾔﾏﾀﾞ ﾀﾛｳ";
             if(spec.Reading=="ローマ字")example.Person="Yamada Taro";
             if(spec.Layout=="DeptOnly")example.Header="鮮魚";
-            if(spec.Layout=="DeptFurigana"){example.Role="やまだ";example.Person="山田";}
+            if(spec.Layout=="DeptFurigana"){example.Role="やまだ";example.Person="山田";example.Title="";}
             if(spec.Layout=="StarRoman"){example.Header="YAMADA";example.Role="3";example.Person="山田";}
             if(spec.Layout=="OptionalHeading")example.Header="製造";
             if(spec.Layout=="SplitCode")example.Person="M-23";
@@ -821,7 +856,7 @@ public MainForm(string settingsFile)
             if(spec.NumberLength>0) example.Number="1234567890".Substring(0,spec.NumberLength);
             if(spec.Layout=="PrefixName") example.Number="13";
             if(spec.Layout=="DeptNumberName") example.Header="製造";
-            if(spec.Layout=="RoleName" || spec.Layout=="DeptRoleName") example.Role="主任";
+            if(spec.Layout=="RoleName" || spec.Layout=="DeptRoleName") example.Role=(spec.Reading=="ローマ字"?"ヤマダ":"主任");
             if(spec.Layout=="InitialName" || spec.Layout=="InitialMixed") example.Role="太";
             if(spec.Layout=="CohortName") example.Role=role.Text==""?"1":role.Text;
             if(spec.Layout=="SizeNumber") { example.ColorDepartment=colorDepartment.Text==""?"M":colorDepartment.Text; example.Header=header.Text==""?"10L":header.Text; example.Number="60"; }
@@ -1143,7 +1178,7 @@ public MainForm(string settingsFile)
             int topCustomer=Array.IndexOf(LabelCatalog.Customers,topMatch);
             int narrowed=customers.Items.Count;customers.Text="よつ";FillCustomerItems("よつ");
             if(customers.Items.Count<narrowed)throw new Exception("メイン顧客欄の入力中絞り込み失敗");
-            FillCustomerItems("");if(customers.Items.Count!=LabelCatalog.Customers.Length)throw new Exception("メイン顧客欄の全件復帰失敗");
+            FillCustomerItems("");if(customers.Items.Count!=LabelCatalog.VisibleCustomerCount())throw new Exception("メイン顧客欄の全件復帰失敗");
             // TextUpdate 相当: 絞り込み後、未展開なら BeginInvoke で DroppedDown（#57 同期 Current では未解消）。
             // 実画面のポインター見え方はここでは検証しない（ヘッドレス／CI 制約）。
             customers.Text="コープフーズ";FillCustomerItems("コープフーズ");
@@ -1174,7 +1209,7 @@ public MainForm(string settingsFile)
             CommitCustomerOnEnter();
             if(customers.Text!=topMatch)throw new Exception("Enterで先頭候補が選ばれない");
             if(SelectedCustomerIndex!=topCustomer)throw new Exception("Enter確定後の顧客インデックス不正");
-            if(customers.Items.Count!=LabelCatalog.Customers.Length)throw new Exception("Enter確定後の全件復帰失敗");
+            if(customers.Items.Count!=LabelCatalog.VisibleCustomerCount())throw new Exception("Enter確定後の全件復帰失敗");
             if(LabelCatalog.Items[active].Customer!=topCustomer)throw new Exception("Enter確定後に内容切替が走らない");
             // 直前の夏服検証で lastFormats[0]=2 のままなので、小ネーム（QR）へ戻してから UI を見る
             formats.SelectedIndex=0; Application.DoEvents();
@@ -1320,15 +1355,23 @@ public MainForm(string settingsFile)
                 if(spec.Reading=="ひらがな") person.Text="やまだ たろう";
                 if(spec.NumberLength>0) number.Text="1234567890".Substring(0,spec.NumberLength);
                 if(spec.Layout=="PrefixName") number.Text="13";
-                if(spec.Layout=="CohortName") role.Text="5";
+                if(spec.Layout=="CohortName") {
+                    if(spec.CohortColors!=null) {
+                        int pick=1; for(int i=0;i<spec.CohortColors.Length;i++) if(!string.IsNullOrEmpty(spec.CohortColors[i])) { pick=i+1; break; }
+                        role.Text=pick.ToString();
+                    } else role.Text="5";
+                }
                 if(spec.Layout=="DeptNumberName") header.Text="製造";
                 if(spec.Layout=="InitialName" || spec.Layout=="InitialMixed") role.Text="太";
                 if(spec.Layout=="MixedName") { person.Text="ブイ ティ ツオン アン"; person.Select(person.Text.LastIndexOf("アン"),2); SetEmphasis(); }
                 if(spec.Layout=="DeptOnly")header.Text="鮮魚";
-                if(spec.Layout=="DeptFurigana"){role.Text="やまだ"; if(header.Visible) header.Text="看護部";}
+                if(spec.Layout=="DeptFurigana"){role.Text="やまだ"; if(header.Visible) header.Text="看護部"; if(department.Visible && department.Items.Count>0) department.SelectedIndex=0; if(jobTitle.Visible && jobTitle.Items.Count>0) jobTitle.SelectedIndex=0;}
+                if(spec.Layout=="DeptName" && spec.Titles!=null){ if(department.Visible && department.Items.Count>0) department.SelectedIndex=0; if(jobTitle.Visible && jobTitle.Items.Count>0) jobTitle.SelectedIndex=0; }
+                if(spec.Layout=="RoleName" && spec.Reading=="ローマ字"){role.Text="ヤマダ"; person.Text="Yamada";}
                 if(spec.Layout=="StarRoman"){header.Text="YAMADA";role.Text="3";}
                 if(spec.Layout=="SplitCode")person.Text="M-23";
                 if(spec.Layout=="FreeText")person.Text="M";
+                if(spec.Layout=="Unavailable" || LabelCatalog.IsHiddenCustomer(spec.Customer)) continue;
                 if(LabelRenderer.Validate(k,Current())!=null && spec.Pending=="" && spec.Layout!="Blank") throw new Exception("追加形式入力検証失敗 "+k+": "+LabelRenderer.Validate(k,Current()));
                 Size mm=LabelCatalog.Millimetres(k);
                 using(Bitmap b=new Bitmap(mm.Width*6,mm.Height*6)) using(Graphics g=Graphics.FromImage(b)) {
@@ -1445,7 +1488,7 @@ public MainForm(string settingsFile)
             Hide(); File.WriteAllText(Path.Combine(folder,"verification.txt"),"PASS: long placement wraps without overlap; color and cohort guides; fixed-font notice; changing formats restores original window height. No print job sent.",Encoding.UTF8);
         }
         void VerifyBulkAdditions(string folder) {
-            if(LabelCatalog.Items.Length!=233 || LabelCatalog.Customers.Length!=134) throw new Exception("登録件数不一致");
+            if(LabelCatalog.Items.Length!=233 || LabelCatalog.Customers.Length!=134 || LabelCatalog.VisibleCustomerCount()!=131) throw new Exception("登録件数不一致 "+LabelCatalog.Items.Length+"/"+LabelCatalog.Customers.Length+"/"+LabelCatalog.VisibleCustomerCount());
             foreach(int row in new int[]{45,46,74,108+1,132+1}) {
                 kinds.SelectedIndex=KindForRow(row); department.SelectedIndex=0;
                 if(LabelCatalog.ColorGroups(active).Length>0) { colorDepartment.SelectedIndex=1; if(colorDepartment.Bounds.IntersectsWith(department.Bounds)) throw new Exception("部署と色の入力欄が重なっています"); }
@@ -1481,7 +1524,7 @@ public MainForm(string settingsFile)
             department.SelectedIndex=0; if(LabelRenderer.Validate(active,Current())!=null) throw new Exception("部署入力後も色未選択で印刷できない");
             colorDepartment.SelectedIndex=1; if(LabelCatalog.ColorName(active,Current())!="赤") throw new Exception("性別選択時の色検証失敗");
             using(Bitmap b=new Bitmap(Width,Height)) { DrawToBitmap(b,new Rectangle(0,0,Width,Height)); b.Save(Path.Combine(folder,"window-bulk.png")); }
-            File.WriteAllText(Path.Combine(folder,"bulk-verification.txt"),"PASS: 134 customers / 233 formats; independent department and color controls; distinct color rules retain selections; numeric lengths including leading zero; cohort colors 1..12; invalid cohorts; circled numbers; fixed font overflow; optional role; blank label; specified male color; two-row surname/given name; optional color-only groups; required print size/department.",Encoding.UTF8);
+            File.WriteAllText(Path.Combine(folder,"bulk-verification.txt"),"PASS: 131 visible customers / 233 formats (catalog slots 134); independent department and color controls; distinct color rules retain selections; numeric lengths including leading zero; cohort colors 1..12; invalid cohorts; circled numbers; fixed font overflow; optional role; blank label; specified male color; two-row surname/given name; optional color-only groups; required print size/department.",Encoding.UTF8);
         }
     }
     static class Program
