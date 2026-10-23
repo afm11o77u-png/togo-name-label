@@ -1405,8 +1405,10 @@ public MainForm(string settingsFile)
             using(Font title=new Font("Yu Gothic UI",15,FontStyle.Bold)) using(Font subtitle=new Font("Yu Gothic UI",11)) {
                 g.Clear(Color.FromArgb(239,242,246));
                 for(int k=4;k<LabelCatalog.Items.Length;k++) {
-                    int x=((k-4)%2)*600, y=((k-4)/2)*310;
                     LabelSpec spec=LabelCatalog.Items[k];
+                    // PNG 生成ループと同じく Unavailable / 非表示顧客はスキップ（generic-{k}.png 未出力）
+                    if(spec.Layout=="Unavailable" || LabelCatalog.IsHiddenCustomer(spec.Customer)) continue;
+                    int x=((k-4)%2)*600, y=((k-4)/2)*310;
                     g.DrawString(LabelCatalog.Customers[spec.Customer],title,Brushes.Black,x+18,y+8);
                     g.DrawString(spec.Format,subtitle,Brushes.Black,x+18,y+40);
                     using(Image label=Image.FromFile(Path.Combine(folder,"generic-"+k+".png"))) {
