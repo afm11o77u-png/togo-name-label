@@ -127,13 +127,37 @@ namespace UnifiedLabels
             return null;
         }
 
-        /// <summary>発行グループ名。未指定は白と分離し「色未指定」にする（自動で白にしない）。</summary>
-        public static string IssueColorGroup(int kind, LabelData d)
+        /// <summary>区分コンボが無く、カタログ色が先方指定のとき（タスク用に手入力が必要）。</summary>
+        public static bool NeedsClientColorInput(int kind, LabelData d)
         {
-            string color=LabelCatalog.ColorName(kind,d);
+            if(kind<0 || kind>=LabelCatalog.Items.Length) return false;
+            if(LabelCatalog.ColorGroups(kind).Length>0) return false;
+            string fixedColor=LabelCatalog.Items[kind].FixedColor??"";
+            if(fixedColor.IndexOf("先方から指定",StringComparison.Ordinal)>=0) return true;
+            string color=LabelCatalog.ColorName(kind,d??new LabelData());
+            return !string.IsNullOrEmpty(color) && color.IndexOf("先方から指定",StringComparison.Ordinal)>=0;
+        }
+
+        /// <summary>発行色名を正規化。未指定・先方指定・？付きは白と分離し「色未指定」。</summary>
+        public static string NormalizeIssueColor(string color)
+        {
             if(string.IsNullOrEmpty(color) || color=="未指定" || color=="先方から指定") return "色未指定";
             if(color.IndexOf('？')>=0 || color.IndexOf('?')>=0) return "色未指定";
             return color;
+        }
+
+        /// <summary>発行グループ名。未指定は白と分離し「色未指定」にする（自動で白にしない）。</summary>
+        public static string IssueColorGroup(int kind, LabelData d)
+        {
+            return IssueColorGroup(kind,d,null);
+        }
+
+        /// <summary>先方指定形式で手入力色があるときはそれを発行グループにする。</summary>
+        public static string IssueColorGroup(int kind, LabelData d, string clientColorOverride)
+        {
+            if(NeedsClientColorInput(kind,d) && !string.IsNullOrWhiteSpace(clientColorOverride))
+                return NormalizeIssueColor(clientColorOverride.Trim().Replace('　',' '));
+            return NormalizeIssueColor(LabelCatalog.ColorName(kind,d));
         }
 
         public static string StatusText(BatchTaskStatus s)
@@ -737,6 +761,16 @@ namespace UnifiedLabels
             if(BatchValidation.ValidateForTask(fuka,open)!=null) throw new Exception("タスク登録で色選択後も失敗: "+BatchValidation.ValidateForTask(fuka,open));
             if(BatchValidation.IssueColorGroup(fuka,new LabelData { Person="a" })!="色未指定") throw new Exception("未指定が色未指定グループにならない");
             if(BatchValidation.IssueColorGroup(fuka,open)!="緑") throw new Exception("日中色グループ失敗");
+            // 先方から指定：手入力色を発行グループへ。区分コンボ付き形式は手入力不要。
+            int andersen=KindForRow(11); // アンデルセン小（PreviousSourceRow=11, FixedColor=先方から指定）
+            LabelData andersenData=new LabelData { Person="山田 太郎", Header="菓子工房アンデルセン" };
+            if(!BatchValidation.NeedsClientColorInput(andersen,andersenData)) throw new Exception("アンデルセンが先方指定の手入力対象でない");
+            if(BatchValidation.IssueColorGroup(andersen,andersenData)!="色未指定") throw new Exception("先方指定の既定が色未指定でない");
+            if(BatchValidation.IssueColorGroup(andersen,andersenData,"赤")!="赤") throw new Exception("先方指定の手入力色が反映されない");
+            if(BatchValidation.IssueColorGroup(andersen,andersenData,"先方から指定")!="色未指定") throw new Exception("手入力の先方指定が色未指定にならない");
+            if(BatchValidation.NeedsClientColorInput(fuka,open)) throw new Exception("区分付き形式を先方指定手入力対象にしている");
+            if(BatchValidation.NormalizeIssueColor("白")!="白" || BatchValidation.NormalizeIssueColor("")!="色未指定")
+                throw new Exception("NormalizeIssueColor 失敗");
 
             // 2) SizeNumber / 部署必須は維持
             int sizeKind=KindForRow(20);
