@@ -342,7 +342,7 @@ namespace UnifiedLabels
         readonly TextBox person=new TextBox();
         readonly TextBox number=new TextBox();
         readonly ComboBox color=new ComboBox();
-        readonly TextBox clientColor=new TextBox();
+        readonly ComboBox clientColor=new ComboBox();
         readonly NumericUpDown copies=new NumericUpDown();
         readonly bool needsClientColor;
 
@@ -365,12 +365,23 @@ namespace UnifiedLabels
             else { color.Items.Add("(色選択なし)"); color.SelectedIndex=0; color.Enabled=false; }
             Controls.Add(color); y+=32;
             AddLabel("部数",y); copies.SetBounds(140,y,80,24); copies.Minimum=1; copies.Maximum=30; copies.Value=Math.Max(1,Math.Min(30,(int)task.Copies)); Controls.Add(copies); y+=32;
-            // 先方指定：一番下の枠（部数行）のさらに下へ少し離して色入力
+            // 先方指定：部数の下に色入力（選択肢がある顧客はドロップダウン）
             if(needsClientColor) {
                 y+=12;
                 AddLabel("色（先方指定）",y);
                 clientColor.SetBounds(140,y,280,24);
-                clientColor.Text=task.ColorGroup=="色未指定"?"":task.ColorGroup;
+                string[] choices=LabelCatalog.Items[task.Kind].ClientColorChoices;
+                string cur=task.ColorGroup=="色未指定"?"":task.ColorGroup;
+                if(choices!=null && choices.Length>0) {
+                    clientColor.DropDownStyle=ComboBoxStyle.DropDownList;
+                    clientColor.Items.AddRange(choices);
+                    int idx=Array.IndexOf(choices,cur);
+                    clientColor.SelectedIndex=idx;
+                } else {
+                    clientColor.DropDownStyle=ComboBoxStyle.DropDown;
+                    clientColor.MaxLength=20;
+                    clientColor.Text=cur;
+                }
                 Controls.Add(clientColor);
                 y+=40;
             } else y+=8;

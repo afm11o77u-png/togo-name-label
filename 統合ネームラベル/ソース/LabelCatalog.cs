@@ -13,6 +13,8 @@ namespace UnifiedLabels
         public int SourceRow, NumberLength, PreviousSourceRow;
         public string FixedColor="", Reading="", HeaderFamily="", NumberPrefix="", Pending="", ColorCaption="区分";
         public string[] Groups=new string[0], Colors=new string[0], Departments;
+        /// <summary>先方指定の手入力色を限定するとき（例: 赤／緑）。null／空＝自由入力。</summary>
+        public string[] ClientColorChoices;
         /// <summary>任意役職の選択肢（部署横に併記。ふりがな Role とは別）。空要素＝未選択可。</summary>
         public string[] Titles;
         /// <summary>期生色の1始まり対応表。null＝Groups/Colorsの周期。空文字＝未設定。</summary>
@@ -145,7 +147,7 @@ namespace UnifiedLabels
             return null;
         }
         public static readonly string[] ColorDepartments={"サラダ","仕分","トリミング","前洗浄","入荷・払出","計量","脱水洗浄","衛生","品質保証室","製造","事務","社長"};
-        public static readonly string[] DepartmentColors={"青","青","緑","緑","緑","赤","赤","赤","青","白","白","白"};
+        public static readonly string[] DepartmentColors={"青","青","緑","緑","緑","赤","赤","赤","白","白","白","白"};
         public static string[] ColorGroups(int kind) {
             return Items[kind].Groups;
         }

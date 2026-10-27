@@ -764,13 +764,38 @@ namespace UnifiedLabels
             // 先方から指定：手入力色を発行グループへ。区分コンボ付き形式は手入力不要。
             int andersen=KindForRow(11); // アンデルセン小（PreviousSourceRow=11, FixedColor=先方から指定）
             LabelData andersenData=new LabelData { Person="山田 太郎", Header="菓子工房アンデルセン" };
+            if(LabelCatalog.Items[andersen].FixedColor!="先方から指定") throw new Exception("アンデルセンのFixedColorが先方から指定でない");
+            string[] andersenChoices=LabelCatalog.Items[andersen].ClientColorChoices;
+            if(andersenChoices==null || andersenChoices.Length!=2 || andersenChoices[0]!="赤" || andersenChoices[1]!="緑")
+                throw new Exception("アンデルセンの色選択肢が赤／緑でない");
+            if(LabelCatalog.ColorName(andersen,andersenData)!="先方から指定") throw new Exception("アンデルセン表示色が先方から指定でない");
             if(!BatchValidation.NeedsClientColorInput(andersen,andersenData)) throw new Exception("アンデルセンが先方指定の手入力対象でない");
             if(BatchValidation.IssueColorGroup(andersen,andersenData)!="色未指定") throw new Exception("先方指定の既定が色未指定でない");
             if(BatchValidation.IssueColorGroup(andersen,andersenData,"赤")!="赤") throw new Exception("先方指定の手入力色が反映されない");
+            if(BatchValidation.IssueColorGroup(andersen,andersenData,"緑")!="緑") throw new Exception("先方指定の緑が反映されない");
             if(BatchValidation.IssueColorGroup(andersen,andersenData,"先方から指定")!="色未指定") throw new Exception("手入力の先方指定が色未指定にならない");
             if(BatchValidation.NeedsClientColorInput(fuka,open)) throw new Exception("区分付き形式を先方指定手入力対象にしている");
             if(BatchValidation.NormalizeIssueColor("白")!="白" || BatchValidation.NormalizeIssueColor("")!="色未指定")
                 throw new Exception("NormalizeIssueColor 失敗");
+            // タンゼン：男性は白／青の2択。トップラン品質保証室は白。
+            int tanzen=-1, tanzenSmall=-1;
+            for(int i=0;i<LabelCatalog.Items.Length;i++) {
+                if(LabelCatalog.Customers[LabelCatalog.Items[i].Customer]!="タンゼンテクニカルプロダクト") continue;
+                if(LabelCatalog.Items[i].Small) tanzenSmall=i; else tanzen=i;
+            }
+            if(tanzen<0 || tanzenSmall<0) throw new Exception("タンゼンの大小形式が見つからない");
+            string[] tanzenGroups=LabelCatalog.ColorGroups(tanzen);
+            string[] tanzenColors=LabelCatalog.GroupColors(tanzen);
+            if(tanzenGroups.Length!=4 || tanzenGroups[0]!="男性（白）" || tanzenGroups[1]!="男性（青）")
+                throw new Exception("タンゼン大の男性色選択肢が白／青でない");
+            if(tanzenColors[0]!="白" || tanzenColors[1]!="青") throw new Exception("タンゼン大の男性色が白／青でない");
+            if(LabelCatalog.ColorGroups(tanzenSmall)[0]!="男性（白）" || LabelCatalog.GroupColors(tanzenSmall)[1]!="青")
+                throw new Exception("タンゼン小の男性色が白／青でない");
+            int toprun=KindForRow(33);
+            int qa=Array.IndexOf(LabelCatalog.ColorGroups(toprun),"品質保証室");
+            if(qa<0 || LabelCatalog.GroupColors(toprun)[qa]!="白") throw new Exception("トップラン品質保証室が白でない");
+            if(LabelCatalog.DepartmentColors[Array.IndexOf(LabelCatalog.ColorDepartments,"品質保証室")]!="白")
+                throw new Exception("DepartmentColorsの品質保証室が白でない");
 
             // 2) SizeNumber / 部署必須は維持
             int sizeKind=KindForRow(20);
