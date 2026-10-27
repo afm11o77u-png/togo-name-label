@@ -128,9 +128,9 @@ namespace UnifiedLabels
         readonly ComboBox jobTitle = new ComboBox();
         readonly Label jobTitleLabel = new Label();
         readonly Label sampleColor = new Label();
-        /// <summary>先方から指定の形式向け。タスク登録時の発行色を手入力（guide 枠の下）。</summary>
+        /// <summary>先方から指定の形式向け。タスク登録時の発行色（プリンター見出しの直上）。</summary>
         readonly Label clientColorLabel = new Label();
-        readonly TextBox clientColor = new TextBox();
+        readonly ComboBox clientColor = new ComboBox();
         int clientColorSlot;
         // 色帯は最大6枚（3行×2列）。鱗幸など赤・緑・青・白・黄の5色凡例を表示するため4枚から拡張。
         readonly Label[] colorLegend = {new Label(),new Label(),new Label(),new Label(),new Label(),new Label()};
@@ -336,11 +336,11 @@ public MainForm(string settingsFile)
             smallPlacement.SetBounds(LeftX,BandTop,FormClientWidth-24,22); largePlacement.SetBounds(LeftX,BandTop+22,FormClientWidth-24,22);
             Controls.Add(garmentSummary); Controls.Add(smallPlacement); Controls.Add(largePlacement);
             guide.SetBounds(LeftX,GuideTop,FormClientWidth-24,40); guide.BackColor=Color.White; guide.BorderStyle=BorderStyle.FixedSingle; guide.Padding=new Padding(6,2,0,0); Controls.Add(guide);
-            // 先方指定色：一番下の枠（guide）のさらに下へ少し離して置く（表示時だけボタン行を押し下げ）
+            // 先方指定色：プリンター見出しの直上（表示時だけプリンター以降を押し下げ）。footer には入れず個別配置。
             clientColorLabel.Text="色（先方指定・タスク用）"; clientColorLabel.Visible=false;
-            clientColorLabel.SetBounds(LeftX,GuideTop+guide.Height+10,160,18); Controls.Add(clientColorLabel);
+            clientColorLabel.SetBounds(LeftX,LegendTop,160,18); Controls.Add(clientColorLabel);
             clientColor.Visible=false; clientColor.MaxLength=20;
-            clientColor.SetBounds(LeftX+170,GuideTop+guide.Height+6,200,FieldHeight); Controls.Add(clientColor);
+            clientColor.SetBounds(LeftX+170,LegendTop,200,FieldHeight); Controls.Add(clientColor);
             Button page = new Button {Text="用紙・方向設定"}, proof = new Button {Text="印刷プレビュー"}, print = new Button {Text="印刷"};
             Button addTask = new Button {Text="タスクに追加"}, openTasks = new Button {Text="タスク一覧"};
             // 右下：印刷。その左隣：タスクに追加（余白10・右端940は従来どおり）。AnchorはTop|Leftのまま（footerのTop押し下げと両立）。
@@ -353,6 +353,7 @@ public MainForm(string settingsFile)
             // 色帯自体は押し下げ対象外（LegendTop に固定し、プリンター以降だけ動かす）
             foreach(Control control in Controls) {
                 if(control.Top<LegendTop) continue;
+                if(control==clientColor || control==clientColorLabel) continue;
                 bool legend=false;
                 for(int n=0;n<colorLegend.Length;n++) if(control==colorLegend[n]) { legend=true; break; }
                 if(!legend) footerControls.Add(control);
@@ -760,32 +761,52 @@ public MainForm(string settingsFile)
             EnsurePlacementBandStack();
             UpdateClientColorField();
         }
-        /// <summary>先方から指定のときだけ、guide 枠の下にタスク用色入力を出す。</summary>
+        /// <summary>先方から指定のときだけ、プリンター見出しの直上にタスク用色入力を出す。</summary>
         void UpdateClientColorField()
         {
             bool show=active>=0 && BatchValidation.NeedsClientColorInput(active,Current());
-            const int gap=10;
+            const int gap=8;
             int needed=show?gap+FieldHeight:0;
             int delta=needed-clientColorSlot;
             if(delta!=0) {
+                // プリンター見出し行（＝printers の CaptionToField 上）以降を押し下げ／戻す
+                int printerCaptionTop=printers.Top-CaptionToField;
                 foreach(Control control in footerControls) {
-                    if(control==clientColor || control==clientColorLabel || control==guide) continue;
-                    if(control.Top>=guide.Bottom) control.Top+=delta;
+                    if(control.Top>=printerCaptionTop) control.Top+=delta;
                 }
                 ClientSize=new Size(ClientSize.Width,ClientSize.Height+delta);
                 clientColorSlot=needed;
             }
             clientColorLabel.Visible=clientColor.Visible=show;
             if(show) {
-                int y=guide.Bottom+gap;
+                string[] choices=LabelCatalog.Items[active].ClientColorChoices;
+                bool limited=choices!=null && choices.Length>0;
+                string keep=clientColor.Text??"";
+                clientColor.BeginUpdate();
+                try {
+                    clientColor.Items.Clear();
+                    if(limited) {
+                        clientColor.DropDownStyle=ComboBoxStyle.DropDownList;
+                        clientColor.Items.AddRange(choices);
+                        int idx=Array.IndexOf(choices,keep);
+                        clientColor.SelectedIndex=idx;
+                    } else {
+                        clientColor.DropDownStyle=ComboBoxStyle.DropDown;
+                        clientColor.Text=keep;
+                    }
+                } finally { clientColor.EndUpdate(); }
+                int printerCaptionTop=printers.Top-CaptionToField;
+                int y=printerCaptionTop-FieldHeight;
                 clientColorLabel.SetBounds(LeftX,y+4,160,18);
                 clientColor.SetBounds(LeftX+170,y,200,FieldHeight);
                 clientColorLabel.BringToFront();
                 clientColor.BringToFront();
-            } else if(clientColor.Focused) {
+            } else {
                 // 非表示時は値を残さずクリア（別形式へ切替後の誤適用防止）
+                clientColor.DropDownStyle=ComboBoxStyle.DropDown;
+                clientColor.Items.Clear();
                 clientColor.Text="";
-            } else clientColor.Text="";
+            }
         }
         /// <summary>複数形式の顧客だけ、貼り付け先帯の上に商品→大/小対応の色違い帯を出す。</summary>
         void UpdateGarmentSummary() {
