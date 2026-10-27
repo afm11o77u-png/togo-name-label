@@ -62,11 +62,18 @@ namespace UnifiedLabels
             grid.Dock=DockStyle.Fill;
             grid.AllowUserToAddRows=false;
             grid.AllowUserToDeleteRows=false;
-            grid.ReadOnly=true;
+            // 色列だけ編集可（他列は列単位で ReadOnly）
+            grid.ReadOnly=false;
             grid.SelectionMode=DataGridViewSelectionMode.FullRowSelect;
             grid.MultiSelect=true;
             grid.AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill;
             grid.RowHeadersVisible=false;
+            grid.EditMode=DataGridViewEditMode.EditOnKeystrokeOrF2;
+            grid.CellEndEdit+=ColorCellEndEdit;
+            grid.CellDoubleClick+=delegate(object s, DataGridViewCellEventArgs e) {
+                if(e.RowIndex>=0 && e.ColumnIndex>=0 && grid.Columns[e.ColumnIndex].Name=="color")
+                    grid.BeginEdit(true);
+            };
             page.Controls.Add(grid);
             page.Controls.Add(top);
         }
@@ -114,6 +121,8 @@ namespace UnifiedLabels
             grid.Columns.Add("updated","更新");
             grid.Columns.Add("id","Id");
             grid.Columns["id"].Visible=false;
+            foreach(DataGridViewColumn col in grid.Columns)
+                col.ReadOnly=col.Name!="color";
             foreach(BatchTask t in store.Tasks) {
                 int i=grid.Rows.Add(
                     BatchValidation.StatusText(t.Status),
@@ -123,6 +132,23 @@ namespace UnifiedLabels
                 grid.Rows[i].Tag=t;
             }
             status.Text="タスク "+store.Tasks.Count+" 件　保存: "+BatchTaskStore.DefaultPath();
+        }
+
+        void ColorCellEndEdit(object sender, DataGridViewCellEventArgs e)
+        {
+            if(e.RowIndex<0 || e.ColumnIndex<0) return;
+            if(grid.Columns[e.ColumnIndex].Name!="color") return;
+            DataGridViewRow row=grid.Rows[e.RowIndex];
+            string id=Convert.ToString(row.Cells["id"].Value);
+            BatchTask t=store.Find(id);
+            if(t==null) return;
+            string color=BatchValidation.NormalizeIssueColor((Convert.ToString(row.Cells["color"].Value)??"").Trim().Replace('　',' '));
+            if(t.ColorGroup==color) { row.Cells["color"].Value=color; return; }
+            t.ColorGroup=color;
+            t.UpdatedAt=DateTime.Now;
+            store.Save();
+            row.Cells["color"].Value=color;
+            row.Cells["updated"].Value=t.UpdatedAt.ToString("yyyy-MM-dd HH:mm");
         }
 
         List<BatchTask> SelectedTasks()
@@ -192,7 +218,9 @@ namespace UnifiedLabels
                 if(dlg.ShowDialog(this)!=DialogResult.OK) return;
                 string err=BatchValidation.ValidateForTask(sel[0].Kind,sel[0].Data.ToLabelData());
                 if(err!=null) { MessageBox.Show(this,err,"入力エラー"); return; }
-                sel[0].ColorGroup=BatchValidation.IssueColorGroup(sel[0].Kind,sel[0].Data.ToLabelData());
+                // 先方指定の手入力色はダイアログ側で ColorGroup を更新済み。それ以外は区分から再計算。
+                if(!BatchValidation.NeedsClientColorInput(sel[0].Kind,sel[0].Data.ToLabelData()))
+                    sel[0].ColorGroup=BatchValidation.IssueColorGroup(sel[0].Kind,sel[0].Data.ToLabelData());
                 sel[0].UpdatedAt=DateTime.Now;
                 store.Save();
                 RefreshGrid();
@@ -314,13 +342,16 @@ namespace UnifiedLabels
         readonly TextBox person=new TextBox();
         readonly TextBox number=new TextBox();
         readonly ComboBox color=new ComboBox();
+        readonly TextBox clientColor=new TextBox();
         readonly NumericUpDown copies=new NumericUpDown();
+        readonly bool needsClientColor;
 
         public BatchTaskEditDialog(BatchTask task)
         {
             this.task=task;
+            needsClientColor=BatchValidation.NeedsClientColorInput(task.Kind,task.Data.ToLabelData());
             Text="タスク編集 — "+task.CustomerName+" / "+task.FormatName;
-            Width=480; Height=320; FormBorderStyle=FormBorderStyle.FixedDialog;
+            Width=480; Height=needsClientColor?360:320; FormBorderStyle=FormBorderStyle.FixedDialog;
             StartPosition=FormStartPosition.CenterParent; MaximizeBox=false; MinimizeBox=false;
             Font=new Font("Yu Gothic UI",9f);
             int y=16;
@@ -333,7 +364,16 @@ namespace UnifiedLabels
             if(groups.Length>0) { color.Items.AddRange(groups); color.SelectedItem=task.Data.ColorDepartment; if(color.SelectedIndex<0 && groups.Length>0) color.SelectedIndex=-1; }
             else { color.Items.Add("(色選択なし)"); color.SelectedIndex=0; color.Enabled=false; }
             Controls.Add(color); y+=32;
-            AddLabel("部数",y); copies.SetBounds(140,y,80,24); copies.Minimum=1; copies.Maximum=30; copies.Value=Math.Max(1,Math.Min(30,(int)task.Copies)); Controls.Add(copies); y+=40;
+            AddLabel("部数",y); copies.SetBounds(140,y,80,24); copies.Minimum=1; copies.Maximum=30; copies.Value=Math.Max(1,Math.Min(30,(int)task.Copies)); Controls.Add(copies); y+=32;
+            // 先方指定：一番下の枠（部数行）のさらに下へ少し離して色入力
+            if(needsClientColor) {
+                y+=12;
+                AddLabel("色（先方指定）",y);
+                clientColor.SetBounds(140,y,280,24);
+                clientColor.Text=task.ColorGroup=="色未指定"?"":task.ColorGroup;
+                Controls.Add(clientColor);
+                y+=40;
+            } else y+=8;
             Button ok=new Button { Text="保存", Left=200, Top=y, Width=100, Height=30, DialogResult=DialogResult.None };
             Button cancel=new Button { Text="キャンセル", Left=310, Top=y, Width=100, Height=30, DialogResult=DialogResult.Cancel };
             ok.Click+=delegate {
@@ -345,6 +385,8 @@ namespace UnifiedLabels
                 task.Copies=(short)copies.Value;
                 string err=BatchValidation.ValidateForTask(task.Kind,task.Data.ToLabelData());
                 if(err!=null) { MessageBox.Show(this,err,"入力エラー"); return; }
+                if(needsClientColor)
+                    task.ColorGroup=BatchValidation.IssueColorGroup(task.Kind,task.Data.ToLabelData(),clientColor.Text);
                 DialogResult=DialogResult.OK;
             };
             Controls.Add(ok); Controls.Add(cancel); CancelButton=cancel;

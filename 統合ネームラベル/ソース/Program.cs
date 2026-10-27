@@ -128,6 +128,10 @@ namespace UnifiedLabels
         readonly ComboBox jobTitle = new ComboBox();
         readonly Label jobTitleLabel = new Label();
         readonly Label sampleColor = new Label();
+        /// <summary>先方から指定の形式向け。タスク登録時の発行色を手入力（guide 枠の下）。</summary>
+        readonly Label clientColorLabel = new Label();
+        readonly TextBox clientColor = new TextBox();
+        int clientColorSlot;
         // 色帯は最大6枚（3行×2列）。鱗幸など赤・緑・青・白・黄の5色凡例を表示するため4枚から拡張。
         readonly Label[] colorLegend = {new Label(),new Label(),new Label(),new Label(),new Label(),new Label()};
         readonly System.Collections.Generic.List<Control> footerControls=new System.Collections.Generic.List<Control>();
@@ -332,6 +336,11 @@ public MainForm(string settingsFile)
             smallPlacement.SetBounds(LeftX,BandTop,FormClientWidth-24,22); largePlacement.SetBounds(LeftX,BandTop+22,FormClientWidth-24,22);
             Controls.Add(garmentSummary); Controls.Add(smallPlacement); Controls.Add(largePlacement);
             guide.SetBounds(LeftX,GuideTop,FormClientWidth-24,40); guide.BackColor=Color.White; guide.BorderStyle=BorderStyle.FixedSingle; guide.Padding=new Padding(6,2,0,0); Controls.Add(guide);
+            // 先方指定色：一番下の枠（guide）のさらに下へ少し離して置く（表示時だけボタン行を押し下げ）
+            clientColorLabel.Text="色（先方指定・タスク用）"; clientColorLabel.Visible=false;
+            clientColorLabel.SetBounds(LeftX,GuideTop+guide.Height+10,160,18); Controls.Add(clientColorLabel);
+            clientColor.Visible=false; clientColor.MaxLength=20;
+            clientColor.SetBounds(LeftX+170,GuideTop+guide.Height+6,200,FieldHeight); Controls.Add(clientColor);
             Button page = new Button {Text="用紙・方向設定"}, proof = new Button {Text="印刷プレビュー"}, print = new Button {Text="印刷"};
             Button addTask = new Button {Text="タスクに追加"}, openTasks = new Button {Text="タスク一覧"};
             // 右下：印刷。その左隣：タスクに追加（余白10・右端940は従来どおり）。AnchorはTop|Leftのまま（footerのTop押し下げと両立）。
@@ -749,6 +758,34 @@ public MainForm(string settingsFile)
             ResizePlacementGuides();
             // 高さ確定後に同Y・重なりを矯正（Resize より前だと青帯が緑帯に隠れることがある）
             EnsurePlacementBandStack();
+            UpdateClientColorField();
+        }
+        /// <summary>先方から指定のときだけ、guide 枠の下にタスク用色入力を出す。</summary>
+        void UpdateClientColorField()
+        {
+            bool show=active>=0 && BatchValidation.NeedsClientColorInput(active,Current());
+            const int gap=10;
+            int needed=show?gap+FieldHeight:0;
+            int delta=needed-clientColorSlot;
+            if(delta!=0) {
+                foreach(Control control in footerControls) {
+                    if(control==clientColor || control==clientColorLabel || control==guide) continue;
+                    if(control.Top>=guide.Bottom) control.Top+=delta;
+                }
+                ClientSize=new Size(ClientSize.Width,ClientSize.Height+delta);
+                clientColorSlot=needed;
+            }
+            clientColorLabel.Visible=clientColor.Visible=show;
+            if(show) {
+                int y=guide.Bottom+gap;
+                clientColorLabel.SetBounds(LeftX,y+4,160,18);
+                clientColor.SetBounds(LeftX+170,y,200,FieldHeight);
+                clientColorLabel.BringToFront();
+                clientColor.BringToFront();
+            } else if(clientColor.Focused) {
+                // 非表示時は値を残さずクリア（別形式へ切替後の誤適用防止）
+                clientColor.Text="";
+            } else clientColor.Text="";
         }
         /// <summary>複数形式の顧客だけ、貼り付け先帯の上に商品→大/小対応の色違い帯を出す。</summary>
         void UpdateGarmentSummary() {
@@ -998,7 +1035,7 @@ public MainForm(string settingsFile)
                 Landscape=document.DefaultPageSettings.Landscape,
                 OffsetX=offset.X, OffsetY=offset.Y,
                 Copies=(short)copies.Value,
-                ColorGroup=BatchValidation.IssueColorGroup(kind,data),
+                ColorGroup=BatchValidation.IssueColorGroup(kind,data,clientColor.Visible?clientColor.Text:null),
                 Status=BatchTaskStatus.Pending
             };
         }
