@@ -420,6 +420,21 @@ public MainForm(string settingsFile)
                 if(selecting || SelectedCustomerIndex<0) return;
                 FillCustomerItems("");
             };
+            // 右クリック：表示中の全顧客（検索と同じ並び順・非表示顧客は除外）を一覧し、クリックで検索選択と同じく切替
+            var customerMenu=new ContextMenuStrip();
+            customerMenu.MaximumSize=new Size(0,Math.Max(200,Screen.PrimaryScreen.WorkingArea.Height*2/3));
+            customerMenu.Opening += delegate(object sender,System.ComponentModel.CancelEventArgs e) {
+                customerMenu.Items.Clear();
+                foreach(string n in LabelCatalog.SortedCustomers()) {
+                    string name=n;
+                    var item=new ToolStripMenuItem(name);
+                    if(name==customers.Text) item.Checked=true;
+                    item.Click += delegate { FillCustomerItems(""); customers.SelectedItem=name; };
+                    customerMenu.Items.Add(item);
+                }
+                e.Cancel=customerMenu.Items.Count==0;
+            };
+            customers.ContextMenuStrip=customerMenu;
             // 未確定入力のままフォーカスが外れたら一致顧客へ寄せる（なければ現在形式の顧客へ戻す）
             customers.Leave += delegate {
                 if(selecting) return;
