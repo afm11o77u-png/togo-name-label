@@ -391,18 +391,8 @@ namespace UnifiedLabels
                 int kind=task.Kind;
                 PrintOffset offset=new PrintOffset(task.OffsetX,task.OffsetY);
                 doc.PrintPage+=delegate(object sender,PrintPageEventArgs e) {
-                    GraphicsState state=e.Graphics.Save();
-                    try {
-                        e.Graphics.PageUnit=GraphicsUnit.Inch;
-                        e.Graphics.ScaleTransform(0.01f,0.01f);
-                        if(kind==1 || (kind>=4 && !LabelCatalog.Items[kind].Small && LabelCatalog.Items[kind].Layout!="QR")) {
-                            e.Graphics.RotateTransform(-90);
-                            e.Graphics.TranslateTransform(-e.PageBounds.Height,0);
-                        }
-                        e.Graphics.TranslateTransform((float)offset.X/.254f,(float)offset.Y/.254f);
-                        LabelRenderer.Draw(e.Graphics,kind,data);
-                        e.HasMorePages=false;
-                    } finally { e.Graphics.Restore(state); }
+                    LabelRenderer.PrintLabel(e.Graphics,e.PageBounds,kind,data,offset);
+                    e.HasMorePages=false;
                 };
                 doc.Print();
             }
@@ -928,6 +918,32 @@ namespace UnifiedLabels
             if(yesNoTitle!="送信失敗" || !runner.Cancelled) throw new Exception("送信失敗の はい＝中止 が効かない");
             if(sendFail.Status!=BatchTaskStatus.Failed) throw new Exception("送信失敗が要確認にならない");
 
+            // 7c) 共通印刷経路：全ラベル種類で、旧来の変換（通常／一括で同一だった処理）と共通メソッドの描画が一致
+            Rectangle page=new Rectangle(0,0,400,400);
+            LabelData sampleData=new LabelData { Person="山田 太郎", Number="1", Role="1" };
+            PrintOffset sampleOffset=new PrintOffset(.5m,-.3m);
+            for(int k=0;k<LabelCatalog.Items.Length;k++) {
+                using(Bitmap a=new Bitmap(500,500)) using(Bitmap b=new Bitmap(500,500))
+                using(Graphics ga=Graphics.FromImage(a)) using(Graphics gb=Graphics.FromImage(b)) {
+                    ga.Clear(Color.White); gb.Clear(Color.White);
+                    string ea=null, eb=null;
+                    try {
+                        GraphicsState st=ga.Save();
+                        try {
+                            ga.PageUnit=GraphicsUnit.Inch;
+                            ga.ScaleTransform(0.01f,0.01f);
+                            if(k==1 || (k>=4 && !LabelCatalog.Items[k].Small && LabelCatalog.Items[k].Layout!="QR")) { ga.RotateTransform(-90); ga.TranslateTransform(-page.Height,0); }
+                            ga.TranslateTransform((float)sampleOffset.X/.254f,(float)sampleOffset.Y/.254f);
+                            LabelRenderer.Draw(ga,k,sampleData);
+                        } finally { ga.Restore(st); }
+                    } catch(Exception ex) { ea=ex.GetType().Name; }
+                    try { LabelRenderer.PrintLabel(gb,page,k,sampleData,sampleOffset); } catch(Exception ex) { eb=ex.GetType().Name; }
+                    if(ea!=eb) throw new Exception("共通印刷経路の例外不一致 kind="+k);
+                    for(int x=0;x<a.Width;x++) for(int y=0;y<a.Height;y++)
+                        if(a.GetPixel(x,y)!=b.GetPixel(x,y)) throw new Exception("共通印刷経路の描画不一致 kind="+k);
+                }
+            }
+
             // 8) Excel/貼付：不正行は登録しない、先頭ゼロ・空欄
             string csv=BatchImport.TemplateCsv()+"\n不正顧客,大ネーム,大,,,太郎,,1\n";
             BatchImportResult bad=BatchImport.FromRows(BatchImport.ParseDelimited(csv),null);
@@ -954,7 +970,7 @@ namespace UnifiedLabels
             if(!File.Exists(templatePath)) throw new Exception("テンプレート出力失敗");
 
             File.WriteAllText(Path.Combine(folder,"batch-verification.txt"),
-                "PASS: task color required vs print optional; persist/reload/clone/delete; interrupt no-resend; same-color multi-customer continuous; next-color blocked until confirm; sent vs confirmed; reprint history; save failure after send stays sent (no double print); send failure yes/no abort; import rejects bad rows. Real printer not used.",
+                "PASS: task color required vs print optional; persist/reload/clone/delete; interrupt no-resend; same-color multi-customer continuous; next-color blocked until confirm; sent vs confirmed; reprint history; save failure after send stays sent (no double print); send failure yes/no abort; shared print transform matches for all kinds; import rejects bad rows. Real printer not used.",
                 Encoding.UTF8);
         }
 
