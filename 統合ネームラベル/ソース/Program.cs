@@ -434,6 +434,15 @@ public MainForm(string settingsFile)
                 }
                 e.Cancel=customerMenu.Items.Count==0;
             };
+            // マウスホイールで上下スクロール（ContextMenuStrip は既定でホイール非対応のため、上下スクロールボタンと同じ内部処理を呼ぶ）
+            System.Reflection.MethodInfo menuScroll=typeof(ToolStripDropDownMenu).GetMethod("ScrollInternal",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic,null,new Type[]{typeof(bool)},null);
+            customerMenu.MouseWheel += delegate(object sender,MouseEventArgs e) {
+                if(menuScroll==null || e.Delta==0) return;
+                bool up=e.Delta>0;
+                int steps=Math.Max(1,Math.Abs(e.Delta)/120)*3;
+                try { for(int i=0;i<steps;i++) menuScroll.Invoke(customerMenu,new object[]{up}); } catch { }
+            };
+            customerMenu.Opened += delegate { customerMenu.Focus(); };
             customers.ContextMenuStrip=customerMenu;
             // 未確定入力のままフォーカスが外れたら一致顧客へ寄せる（なければ現在形式の顧客へ戻す）
             customers.Leave += delegate {
