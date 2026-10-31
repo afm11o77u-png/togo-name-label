@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# 更新.bat は ZIP 展開後に cmd で正しく動くよう CRLF のまま保持する
+*.bat -text
