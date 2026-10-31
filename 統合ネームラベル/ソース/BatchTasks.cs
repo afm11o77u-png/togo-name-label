@@ -410,6 +410,19 @@ namespace UnifiedLabels
         }
     }
 
+    /// <summary>検証用：送信成功後に保存先をディレクトリに置き換え、次の保存を失敗させる。</summary>
+    sealed class SaveBreakingBatchJobSender : IBatchJobSender
+    {
+        readonly string path;
+        public SaveBreakingBatchJobSender(string path) { this.path=path; }
+        public bool Send(BatchTask task)
+        {
+            if(File.Exists(path)) File.Delete(path);
+            Directory.CreateDirectory(path);
+            return true;
+        }
+    }
+
     public delegate bool BatchConfirmHandler(string title, string message);
     public delegate void BatchStatusHandler(string message);
 
@@ -419,11 +432,17 @@ namespace UnifiedLabels
         public BatchConfirmHandler Confirm=delegate(string t,string m) {
             return MessageBox.Show(m,t,MessageBoxButtons.OKCancel,MessageBoxIcon.Information)==DialogResult.OK;
         };
+        /// <summary>はい／いいえ確認。true＝はい。</summary>
+        public BatchConfirmHandler ConfirmYesNo=delegate(string t,string m) {
+            return MessageBox.Show(m,t,MessageBoxButtons.YesNo,MessageBoxIcon.Warning)==DialogResult.Yes;
+        };
         public BatchStatusHandler Report=delegate(string m) { };
         public IBatchJobSender Sender=new PrintDocumentBatchJobSender();
 
         public int JobsSent { get; private set; }
         public bool Cancelled { get; private set; }
+        /// <summary>送信成功後の保存失敗。タスクは送信済みのまま（再発行対象にしない）。</summary>
+        public readonly List<string> SaveErrors=new List<string>();
         public string StopReason { get; private set; }
 
         public List<List<BatchTask>> GroupByColor(IEnumerable<BatchTask> tasks)
@@ -462,7 +481,7 @@ namespace UnifiedLabels
 
         public void Run(IList<BatchTask> tasks, BatchTaskStore store, bool reprint)
         {
-            JobsSent=0; Cancelled=false; StopReason="";
+            JobsSent=0; Cancelled=false; StopReason=""; SaveErrors.Clear();
             List<string> errors=new List<string>();
             List<BatchTask> ready=FilterReady(tasks,errors);
             if(errors.Count>0 && ready.Count==0) {
@@ -507,7 +526,6 @@ namespace UnifiedLabels
                         });
                         t.UpdatedAt=DateTime.Now;
                         JobsSent++;
-                        if(store!=null) store.Save();
                     } catch(Exception ex) {
                         t.Status=BatchTaskStatus.Failed;
                         t.LastError=ex.Message;
@@ -517,11 +535,20 @@ namespace UnifiedLabels
                         });
                         t.UpdatedAt=DateTime.Now;
                         if(store!=null) store.Save();
-                        if(!Confirm("送信失敗",ex.Message+"\r\n以降のジョブ送信を中止しますか？（はい＝中止）")) {
+                        if(!ConfirmYesNo("送信失敗",ex.Message+"\r\n以降のジョブ送信を中止しますか？（はい＝中止／いいえ＝続行）")) {
                             // No = continue
                         } else {
                             Cancelled=true; StopReason="送信失敗後に中断"; return;
                         }
+                        continue;
+                    }
+                    // 送信成功後の保存失敗は送信失敗と区別する（Failed にすると再発行で二重印刷になる）
+                    try {
+                        if(store!=null) store.Save();
+                    } catch(Exception ex) {
+                        string msg="送信済みですが保存に失敗しました（再発行しないでください）: "+t.CustomerName+" / "+t.Data.Person+": "+ex.Message;
+                        SaveErrors.Add(msg);
+                        Report(msg);
                     }
                 }
                 if(!Confirm("完了確認","色【"+color+"】のジョブ送信が終わりました。\r\nプリンター出力が終わっていることを確認したら OK。\r\nまだの場合はキャンセルで中断（次色は送りません）。")) {
@@ -874,6 +901,33 @@ namespace UnifiedLabels
             if(sent.History.Count<=histBefore) throw new Exception("再印刷で履歴が増えない");
             if(sent.Status!=BatchTaskStatus.CompletedConfirmed) throw new Exception("確認後完了にならない");
 
+            // 7b) 送信成功後の保存失敗は Failed にしない（二重印刷防止）・送信失敗は はい／いいえ 確認
+            string breakPath=Path.Combine(Path.GetFullPath(folder),"save-break","batch-tasks.xml");
+            Directory.CreateDirectory(Path.GetDirectoryName(breakPath));
+            if(Directory.Exists(breakPath)) Directory.Delete(breakPath);
+            if(File.Exists(breakPath)) File.Delete(breakPath);
+            BatchTaskStore breakStore=new BatchTaskStore(breakPath);
+            BatchTask saveFail=MakeTask(fuka,"保存失敗","日中","緑");
+            breakStore.Add(saveFail);
+            runner=new BatchIssueRunner { Sender=new SaveBreakingBatchJobSender(breakPath) };
+            runner.Confirm=delegate(string a,string b){ return !a.StartsWith("完了確認"); };
+            bool yesNoAsked=false;
+            runner.ConfirmYesNo=delegate(string a,string b){ yesNoAsked=true; return true; };
+            runner.Run(new BatchTask[]{saveFail},breakStore,false);
+            if(saveFail.Status!=BatchTaskStatus.SentAwaitingConfirm) throw new Exception("保存失敗で送信済みが確定しない: "+saveFail.Status);
+            if(runner.JobsSent!=1 || runner.SaveErrors.Count!=1) throw new Exception("保存失敗が別エラーとして通知されない");
+            if(yesNoAsked) throw new Exception("保存失敗を送信失敗として扱った");
+            List<string> resendErr=new List<string>();
+            if(runner.FilterReady(new BatchTask[]{saveFail},resendErr).Count!=0) throw new Exception("保存失敗タスクが再発行対象になった");
+            BatchTask sendFail=MakeTask(fuka,"送信失敗","日中","緑");
+            RecordingBatchJobSender thrower=new RecordingBatchJobSender { ThrowOnSend=true };
+            runner=new BatchIssueRunner { Sender=thrower, Confirm=delegate(string a,string b){return true;} };
+            string yesNoTitle=null;
+            runner.ConfirmYesNo=delegate(string a,string b){ yesNoTitle=a; return true; };
+            runner.Run(new BatchTask[]{sendFail},null,false);
+            if(yesNoTitle!="送信失敗" || !runner.Cancelled) throw new Exception("送信失敗の はい＝中止 が効かない");
+            if(sendFail.Status!=BatchTaskStatus.Failed) throw new Exception("送信失敗が要確認にならない");
+
             // 8) Excel/貼付：不正行は登録しない、先頭ゼロ・空欄
             string csv=BatchImport.TemplateCsv()+"\n不正顧客,大ネーム,大,,,太郎,,1\n";
             BatchImportResult bad=BatchImport.FromRows(BatchImport.ParseDelimited(csv),null);
@@ -900,7 +954,7 @@ namespace UnifiedLabels
             if(!File.Exists(templatePath)) throw new Exception("テンプレート出力失敗");
 
             File.WriteAllText(Path.Combine(folder,"batch-verification.txt"),
-                "PASS: task color required vs print optional; persist/reload/clone/delete; interrupt no-resend; same-color multi-customer continuous; next-color blocked until confirm; sent vs confirmed; reprint history; import rejects bad rows. Real printer not used.",
+                "PASS: task color required vs print optional; persist/reload/clone/delete; interrupt no-resend; same-color multi-customer continuous; next-color blocked until confirm; sent vs confirmed; reprint history; save failure after send stays sent (no double print); send failure yes/no abort; import rejects bad rows. Real printer not used.",
                 Encoding.UTF8);
         }
 
