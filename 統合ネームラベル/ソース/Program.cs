@@ -1417,6 +1417,7 @@ public MainForm(string settingsFile)
             if(active!=1 || number.Text!="Y12345") throw new Exception("顧客入力保持失敗");
             for(int k=4;k<LabelCatalog.Items.Length;k++) {
                 LabelSpec spec=LabelCatalog.Items[k];
+                if(LabelCatalog.IsHiddenCustomer(spec.Customer)) continue; // 非表示顧客は顧客一覧で選べない
                 SelectedCustomerIndex=spec.Customer;
                 int index=Array.IndexOf(LabelCatalog.ForCustomer(spec.Customer),k); formats.SelectedIndex=index;
                 if(active!=k) throw new Exception("追加形式の切替失敗 "+k);
