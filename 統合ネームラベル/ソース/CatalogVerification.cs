@@ -169,8 +169,18 @@ namespace UnifiedLabels {
    Need(LabelCatalog.Items[0].NeedsNumber && LabelCatalog.Items[1].NeedsNumber && LabelCatalog.Items[2].NeedsNumber && LabelCatalog.Items[3].NeedsNumber,"Legacy codes hidden");
    kinds.SelectedIndex=0;digits.SelectedIndex=1;number.Text="Y12345";digits.SelectedIndex=0;Need(number.Text=="Y1234","Yotsuba 5 to 4 truncation");
    Need(preferences.Get(OffsetKey).X==0,"Unexpected test adjustment");
-   Need(LabelCatalog.VisibleCustomerCount()==131 && LabelCatalog.Customers.Length==134 && LabelCatalog.Items.Length==233,"Catalog counts");
-   File.WriteAllText(Path.Combine(folder,"latest-verification.txt"),"PASS: 131 visible / 134 slots / 233 formats; higashinaebo/ashita titles; mikado CompanyCodeName; Benkama cohort maps; GOOD NEWS surname; rinko single-line; yotsuba summer unchanged; deleted customers hidden; no print jobs sent.",Encoding.UTF8);Hide();
+   Need(LabelCatalog.VisibleCustomerCount()==131 && LabelCatalog.Customers.Length==135 && LabelCatalog.Items.Length==234,"Catalog counts");
+   // 日通帯広運輸は非表示（配列位置は維持）、日本通運は末尾に追加して表示
+   Need(LabelCatalog.Customers[68]=="日通帯広運輸" && LabelCatalog.IsHiddenCustomer(68) && LabelCatalog.IsHiddenCustomerName("日通帯広運輸"),"Obihiro Nittsu hidden at same index");
+   Need(LabelCatalog.Customers[134]=="日本通運" && !LabelCatalog.IsHiddenCustomer(134),"Nippon Express visible");
+   {int nx=LabelCatalog.Items.Length-1;LabelSpec ns=LabelCatalog.Items[nx];Need(ns.SourceRow==142 && ns.Customer==134 && ns.Small && ns.Layout=="HeadingName" && ns.Heading=="日本通運㈱" && ns.FixedColor=="緑" && ns.HeadingFont==18 && ns.Placement=="白衣：左胸／白下：左前／清浄帽：左耳上／準清浄帽：左耳上","Nippon Express spec");
+    Need(LabelCatalog.Validate(nx,new LabelData{Person="山田 太郎"})==null,"Nippon Express printable");
+    for(int k=0;k<LabelCatalog.Items.Length;k++)if(LabelCatalog.Items[k].Customer==68)Need(LabelCatalog.Validate(k,new LabelData{Person="山田 太郎"})!=null,"Obihiro Nittsu not printable");}
+   for(int k=0;k<LabelCatalog.Items.Length;k++){LabelSpec cs=LabelCatalog.Items[k];
+    if(cs.Customer==58) Need(string.Join(",",cs.Groups)=="男性,女性" && string.Join(",",cs.Colors)=="白,白","Tokachi Seian women white");
+    if(cs.Customer==96) Need(cs.FixedColor=="" && string.Join(",",cs.Groups)=="レンタル品,CL品" && string.Join(",",cs.Colors)=="緑,青","Bunmeido rental/CL colors");
+    if(cs.Customer==131 && cs.SourceRow==27) Need(cs.Layout=="InitialName" && cs.SurnameOnly && cs.MaximumFont==36 && cs.Format=="小ネーム（苗字のみ）" && LabelCatalog.Validate(k,new LabelData{Person="山田",Role="太"})==null && LabelCatalog.Validate(k,new LabelData{Person="山田",Role="太郎"})!=null,"Air Water cap initial");}
+   File.WriteAllText(Path.Combine(folder,"latest-verification.txt"),"PASS: 131 visible / 135 slots / 234 formats; nittsu obihiro hidden / nippon express added; higashinaebo/ashita titles; mikado CompanyCodeName; Benkama cohort maps; GOOD NEWS surname; rinko single-line; yotsuba summer unchanged; deleted customers hidden; no print jobs sent.",Encoding.UTF8);Hide();
   }
  }
 }

@@ -133,10 +133,10 @@ namespace UnifiedLabels
         public static bool IsHiddenCustomer(int customer) {
             if(customer<0 || customer>=Customers.Length) return true;
             string name=Customers[customer];
-            return name=="ホワイトファーム" || name=="あすかHOUSE" || name=="日綜中垣病院";
+            return name=="ホワイトファーム" || name=="あすかHOUSE" || name=="日綜中垣病院" || name=="日通帯広運輸";
         }
         public static bool IsHiddenCustomerName(string name) {
-            return name=="ホワイトファーム" || name=="あすかHOUSE" || name=="日綜中垣病院";
+            return name=="ホワイトファーム" || name=="あすかHOUSE" || name=="日綜中垣病院" || name=="日通帯広運輸";
         }
         public static readonly string[] Customers=CreateCustomers();
         public static string[] DepartmentNames(int kind) {
