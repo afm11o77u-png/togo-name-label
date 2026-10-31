@@ -47,6 +47,18 @@ namespace UnifiedLabels
             }
             return null;
         }
+        /// <summary>印刷用の共通変換（1/100インチ単位・回転・オフセット）を適用して描画する。通常発行と一括発行の共通経路。</summary>
+        public static void PrintLabel(Graphics g, Rectangle pageBounds, int kind, LabelData d, PrintOffset offset)
+        {
+            GraphicsState state=g.Save();
+            try {
+                g.PageUnit=GraphicsUnit.Inch;
+                g.ScaleTransform(0.01f,0.01f);
+                if(kind==1 || (kind>=4 && !LabelCatalog.Items[kind].Small && LabelCatalog.Items[kind].Layout!="QR")) { g.RotateTransform(-90); g.TranslateTransform(-pageBounds.Height,0); }
+                g.TranslateTransform((float)offset.X/.254f,(float)offset.Y/.254f);
+                Draw(g,kind,d);
+            } finally { g.Restore(state); }
+        }
         public static void Draw(Graphics g, int kind, LabelData d)
         {
             if(kind>=4) { LabelCatalog.Draw(g,kind,d); return; }
@@ -1075,14 +1087,7 @@ public MainForm(string settingsFile)
         }
         void PrintPage(object sender, PrintPageEventArgs e)
         {
-            GraphicsState state=e.Graphics.Save();
-            try {
-                e.Graphics.PageUnit=GraphicsUnit.Inch;
-                e.Graphics.ScaleTransform(0.01f,0.01f);
-                if(active==1 || (active>=4 && !LabelCatalog.Items[active].Small && LabelCatalog.Items[active].Layout!="QR")) { e.Graphics.RotateTransform(-90); e.Graphics.TranslateTransform(-e.PageBounds.Height,0); }
-                PrintOffset offset=CurrentOffset();e.Graphics.TranslateTransform((float)offset.X/.254f,(float)offset.Y/.254f);
-                LabelRenderer.Draw(e.Graphics,active,Current()); e.HasMorePages=false;
-            } finally { e.Graphics.Restore(state); }
+            LabelRenderer.PrintLabel(e.Graphics,e.PageBounds,active,Current(),CurrentOffset()); e.HasMorePages=false;
         }
         void Safe(Action action)
         {
