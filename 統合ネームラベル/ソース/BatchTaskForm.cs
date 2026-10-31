@@ -324,11 +324,15 @@ namespace UnifiedLabels
             runner.Confirm=delegate(string title,string message) {
                 return MessageBox.Show(this,message,title,MessageBoxButtons.OKCancel,MessageBoxIcon.Information)==DialogResult.OK;
             };
+            runner.ConfirmYesNo=delegate(string title,string message) {
+                return MessageBox.Show(this,message,title,MessageBoxButtons.YesNo,MessageBoxIcon.Warning)==DialogResult.Yes;
+            };
             tabs.SelectedIndex=1;
             runner.Run(targets,store,reprint);
             string summary="送信ジョブ数: "+runner.JobsSent
                 +(runner.Cancelled?"\r\n中断: "+runner.StopReason:"\r\n完了")
-                +(string.IsNullOrEmpty(runner.StopReason)?"":("\r\n"+runner.StopReason));
+                +(string.IsNullOrEmpty(runner.StopReason)?"":("\r\n"+runner.StopReason))
+                +(runner.SaveErrors.Count==0?"":("\r\n保存失敗（送信済み・再発行しないでください）:\r\n"+string.Join("\r\n",runner.SaveErrors.ToArray())));
             issueLog.AppendText(summary+"\r\n");
             MessageBox.Show(this,summary,"一括発行");
         }
