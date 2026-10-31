@@ -176,6 +176,9 @@ namespace UnifiedLabels {
    {int nx=LabelCatalog.Items.Length-1;LabelSpec ns=LabelCatalog.Items[nx];Need(ns.SourceRow==142 && ns.Customer==134 && ns.Small && ns.Layout=="HeadingName" && ns.Heading=="日本通運㈱" && ns.FixedColor=="緑" && ns.HeadingFont==18 && ns.Placement=="白衣：左胸／白下：左前／清浄帽：左耳上／準清浄帽：左耳上","Nippon Express spec");
     Need(LabelCatalog.Validate(nx,new LabelData{Person="山田 太郎"})==null,"Nippon Express printable");
     for(int k=0;k<LabelCatalog.Items.Length;k++)if(LabelCatalog.Items[k].Customer==68)Need(LabelCatalog.Validate(k,new LabelData{Person="山田 太郎"})!=null,"Obihiro Nittsu not printable");}
+   for(int k=0;k<LabelCatalog.Items.Length;k++){LabelSpec cs=LabelCatalog.Items[k];
+    if(cs.Customer==58) Need(string.Join(",",cs.Groups)=="男性,女性" && string.Join(",",cs.Colors)=="白,白","Tokachi Seian women white");
+    if(cs.Customer==96) Need(cs.FixedColor=="" && string.Join(",",cs.Groups)=="レンタル品,CL品" && string.Join(",",cs.Colors)=="緑,青","Bunmeido rental/CL colors");}
    File.WriteAllText(Path.Combine(folder,"latest-verification.txt"),"PASS: 131 visible / 135 slots / 234 formats; nittsu obihiro hidden / nippon express added; higashinaebo/ashita titles; mikado CompanyCodeName; Benkama cohort maps; GOOD NEWS surname; rinko single-line; yotsuba summer unchanged; deleted customers hidden; no print jobs sent.",Encoding.UTF8);Hide();
   }
  }
