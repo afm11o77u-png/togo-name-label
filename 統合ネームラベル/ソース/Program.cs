@@ -420,27 +420,48 @@ public MainForm(string settingsFile)
                 if(selecting || SelectedCustomerIndex<0) return;
                 FillCustomerItems("");
             };
-            // 右クリック：表示中の全顧客（検索と同じ並び順・非表示顧客は除外）を一覧し、クリックで検索選択と同じく切替
+            // 右クリック：表示中の全顧客（検索と同じ並び順・非表示顧客は除外）を一覧し、クリックで検索選択と同じく切替。
+            // 軽量化：項目は一覧が変わったときだけ作り直し、開くたびにはチェック印だけ更新する。
             var customerMenu=new ContextMenuStrip();
+            customerMenu.ShowImageMargin=false; customerMenu.ShowCheckMargin=true;
             customerMenu.MaximumSize=new Size(0,Math.Max(200,Screen.PrimaryScreen.WorkingArea.Height*2/3));
+            string menuKey=null;
             customerMenu.Opening += delegate(object sender,System.ComponentModel.CancelEventArgs e) {
-                customerMenu.Items.Clear();
-                foreach(string n in LabelCatalog.SortedCustomers()) {
-                    string name=n;
-                    var item=new ToolStripMenuItem(name);
-                    if(name==customers.Text) item.Checked=true;
-                    item.Click += delegate { FillCustomerItems(""); customers.SelectedItem=name; };
-                    customerMenu.Items.Add(item);
+                string[] names=LabelCatalog.SortedCustomers();
+                string key=string.Join("\n",names);
+                if(key!=menuKey) {
+                    var items=new ToolStripItem[names.Length];
+                    for(int i=0;i<names.Length;i++) {
+                        string name=names[i];
+                        var item=new ToolStripMenuItem(name);
+                        item.Click += delegate { FillCustomerItems(""); customers.SelectedItem=name; };
+                        items[i]=item;
+                    }
+                    customerMenu.SuspendLayout();
+                    customerMenu.Items.Clear();
+                    customerMenu.Items.AddRange(items);
+                    customerMenu.ResumeLayout(false);
+                    menuKey=key;
                 }
+                string current=customers.Text;
+                foreach(ToolStripItem it in customerMenu.Items) { var mi=it as ToolStripMenuItem; if(mi!=null) mi.Checked=mi.Text==current; }
                 e.Cancel=customerMenu.Items.Count==0;
             };
-            // マウスホイールで上下スクロール（ContextMenuStrip は既定でホイール非対応のため、上下スクロールボタンと同じ内部処理を呼ぶ）
+            // マウスホイールで上下スクロール（上下スクロールボタンと同じ内部処理を呼ぶ）。
+            // 内部処理は「最後の顧客が一番上に来るまで」進んでしまい下に空欄ができるため、最後の顧客が下端に見えたら止める。
             System.Reflection.MethodInfo menuScroll=typeof(ToolStripDropDownMenu).GetMethod("ScrollInternal",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic,null,new Type[]{typeof(bool)},null);
             customerMenu.MouseWheel += delegate(object sender,MouseEventArgs e) {
-                if(menuScroll==null || e.Delta==0) return;
+                if(menuScroll==null || e.Delta==0 || customerMenu.Items.Count==0) return;
                 bool up=e.Delta>0;
                 int steps=Math.Max(1,Math.Abs(e.Delta)/120)*3;
-                try { for(int i=0;i<steps;i++) menuScroll.Invoke(customerMenu,new object[]{up}); } catch { }
+                try {
+                    for(int i=0;i<steps;i++) {
+                        Rectangle view=customerMenu.DisplayRectangle;
+                        if(up) { if(customerMenu.Items[0].Bounds.Top>=view.Top) break; }
+                        else { if(customerMenu.Items[customerMenu.Items.Count-1].Bounds.Bottom<=view.Bottom) break; }
+                        menuScroll.Invoke(customerMenu,new object[]{up});
+                    }
+                } catch { }
             };
             customerMenu.Opened += delegate { customerMenu.Focus(); };
             customers.ContextMenuStrip=customerMenu;
