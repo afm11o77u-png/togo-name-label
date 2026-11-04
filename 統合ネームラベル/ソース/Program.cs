@@ -1680,7 +1680,7 @@ public MainForm(string settingsFile)
             colorDepartment.SelectedIndex=10; header.Text="10L"; if(LabelRenderer.Validate(active,Current())!=null || LabelCatalog.ColorName(active,Current())!="白") throw new Exception("その他サイズ検証失敗");
             kinds.SelectedIndex=KindForRow(27); number.Text="0123"; if(LabelRenderer.Validate(active,Current())!=null) throw new Exception("4桁の先頭ゼロ失敗"); number.Text="123"; if(LabelRenderer.Validate(active,Current())==null) throw new Exception("番号桁数検証失敗");
             kinds.SelectedIndex=KindForRow(146); person.Text="テキ シホウ"; number.Text="0123456";
-            string[] cycle={"オレンジ","緑","青","白"};
+            string[] cycle={"赤","緑","青","白"};
             for(int n=1;n<=12;n++) { role.Text=n.ToString(); if(LabelCatalog.ColorName(active,Current())!=cycle[(n-1)%4] || LabelRenderer.Validate(active,Current())!=null) throw new Exception("期生色ループ失敗"); }
             foreach(string bad in new string[]{"0","-1","abc","1000"}) { role.Text=bad; if(LabelRenderer.Validate(active,Current())==null) throw new Exception("期生入力検証失敗"); }
             if(LabelCatalog.Circled(13)!="⑬" || LabelCatalog.Circled(21)!="㉑" || LabelCatalog.Circled(50)!="㊿" || LabelCatalog.Circled(51)!="(51)") throw new Exception("丸数字変換失敗");

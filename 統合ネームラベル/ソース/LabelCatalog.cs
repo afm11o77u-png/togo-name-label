@@ -246,7 +246,7 @@ namespace UnifiedLabels
             // SizeNumber: サイズ文字列が印字。CohortName: 期生が印字。ColorFromDepartment: 部署が印字。
             return s.Layout=="SizeNumber" || s.Layout=="CohortName" || s.ColorFromDepartment;
         }
-        public static Color Swatch(string name) { name=name.Replace("?","").Replace("？","").Trim();return name=="青"?Color.LightSkyBlue:name=="緑"?Color.LightGreen:name=="赤"?Color.LightCoral:name=="黄"?Color.LightYellow:name=="オレンジ"?Color.FromArgb(255,190,120):Color.White; }
+        public static Color Swatch(string name) { name=name.Replace("?","").Replace("？","").Trim();return name=="青"?Color.LightSkyBlue:name=="緑"?Color.LightGreen:name=="赤"?Color.LightCoral:name=="黄"?Color.LightYellow:name=="オレンジ"?Color.PeachPuff:Color.White; }
         const string R="HG丸ｺﾞｼｯｸM-PRO", P="MS PGothic";
         public static readonly LabelSpec[] Items=CreateItems();
         public static int[] ForCustomer(int customer)
