@@ -229,6 +229,8 @@ namespace UnifiedLabels
         }
         public static string ColorName(int kind,LabelData d)
         {
+            // 弁釜実習生（期生）：「ラベル色」欄で選んだ色を期生の色より優先
+            if(Items[kind].Layout=="CohortName" && d!=null && !string.IsNullOrEmpty(d.CustomColor)) return d.CustomColor;
             if(Items[kind].Layout=="DeptOnly" && Items[kind].FixedColor=="緑？")return d.Header.Replace(" ","").Replace("　","")=="鮮魚"?"緑？":"先方から指定";
             if(Items[kind].Layout=="CohortName" && Items[kind].CohortColors!=null) {
                 int n; if(!TryCohort(d.Role,out n) || n<1) return "未指定";
@@ -329,7 +331,7 @@ namespace UnifiedLabels
             // 色確認専用の Groups は任意。印字に使う区分（サイズ・期生・部署連動色）だけ必須。
             if(s.Layout=="CohortName" && s.CohortColors!=null) {
                 int cn; if(!TryCohort(d.Role,out cn) || cn<1) return "期生を数字で入力してください（例：5）。";
-                if(cn>s.CohortColors.Length || string.IsNullOrEmpty(s.CohortColors[cn-1]))
+                if(string.IsNullOrEmpty(d.CustomColor) && (cn>s.CohortColors.Length || string.IsNullOrEmpty(s.CohortColors[cn-1])))
                     return "この期生の色は未設定です。色指定を確認してください。";
             } else if(groups.Length>0 && ColorGroupAffectsPrint(kind) && Array.IndexOf(groups,SelectedGroup(kind,d))<0 && !IsUnlistedDepartment(kind,d))
                 return s.Layout=="CohortName"?"期生を半角数字で入力してください。":(string.IsNullOrEmpty(s.ColorCaption)?"区分":s.ColorCaption)+"を選択してラベルの色を確認してください。";

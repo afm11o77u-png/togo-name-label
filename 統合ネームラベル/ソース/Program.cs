@@ -661,9 +661,17 @@ public MainForm(string settingsFile)
             deptColorUpdating=true;
             try {
                 LabelData d=active>=0?Current():null;
-                bool show=d!=null && LabelCatalog.IsUnlistedDepartment(active,d);
-                string key=show?active+"|"+LabelCatalog.SelectedGroup(active,d):"";
-                if(key!=deptColorFor) { deptColor.SelectedIndex=-1; deptColorFor=key; }
+                // 弁釜実習生（期生）は常に表示。先頭の空欄＝期生の色。期生を変えたらその期生の色に自動で合わせる（記憶しない）。
+                bool cohort=d!=null && LabelCatalog.Items[active].Layout=="CohortName";
+                bool show=d!=null && (cohort || LabelCatalog.IsUnlistedDepartment(active,d));
+                bool hasBlank=deptColor.Items.Count>0 && (deptColor.Items[0] as string)=="";
+                if(cohort && !hasBlank) deptColor.Items.Insert(0,""); else if(!cohort && hasBlank) deptColor.Items.RemoveAt(0);
+                deptColorLabel.Text=cohort?"ラベル色（期生で自動・変更すると優先）":"ラベル色（一覧にない部署・タスク追加時に必要）";
+                int cn; string key=!show?"":cohort?active+"|期生|"+(LabelCatalog.TryCohort(d.Role,out cn)?cn.ToString():""):active+"|"+LabelCatalog.SelectedGroup(active,d);
+                if(key!=deptColorFor) {
+                    deptColor.SelectedIndex=-1; deptColorFor=key;
+                    if(cohort) { int i=deptColor.Items.IndexOf(LabelCatalog.ColorName(active,new LabelData{Role=d.Role})); deptColor.SelectedIndex=i>0?i:0; }
+                }
                 if(deptColor.Visible!=show) {
                     deptColor.Visible=deptColorLabel.Visible=show;
                     LayoutInputStack(LabelCatalog.Items[active]);
@@ -1007,7 +1015,7 @@ public MainForm(string settingsFile)
                 for(int d=0;d<groups.Length;d++) if(groupColors[d]==colors[n]) {
                     if(list!="") list+=" ／ ";
                     string name=groups[d];
-                    list+=name==LabelCatalog.SelectedGroup(active,Current())?"【"+name+"】":name;
+                    list+=name==LabelCatalog.SelectedGroup(active,Current()) && LabelCatalog.ColorName(active,Current())==colors[n]?"【"+name+"】":name;
                 }
                 colorLegend[n].Text=colors[n]+"ラベル"+(LabelCatalog.ColorName(active,Current())==colors[n]?"（【 】は選択中の区分）":"")+"\r\n"+list;
                 colorLegend[n].BringToFront();
