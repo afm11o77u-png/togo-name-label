@@ -680,6 +680,8 @@ namespace UnifiedLabels
                     int kind=ResolveKind(customer,format,size);
                     if(kind<0) { result.Errors.Add("行"+displayRow+": 顧客・形式を特定できません（顧客="+customer+", 形式="+format+"）"); continue; }
                     LabelSpec importSpec=LabelCatalog.Items[kind];
+                    // 部署で色が決まる形式（北のアトリエ小など）は「部署」列でも受け付ける。従来の「区分」列もそのまま使える。
+                    if(string.IsNullOrWhiteSpace(group) && importSpec.ColorCaption=="部署" && !importSpec.ColorFromDepartment && LabelCatalog.DepartmentNames(kind)==null) { group=dept; dept=""; }
                     // 明日佳・東苗穂など：役職＝肩書(Title)、ふりがな＝Role。旧CSV（ふりがな列なし）は役職をRoleのまま。
                     string title="", roleValue=role;
                     if(importSpec.Titles!=null) {

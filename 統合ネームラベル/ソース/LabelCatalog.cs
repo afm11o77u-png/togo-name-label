@@ -321,7 +321,7 @@ namespace UnifiedLabels
                 if(cn>s.CohortColors.Length || string.IsNullOrEmpty(s.CohortColors[cn-1]))
                     return "この期生の色は未設定です。色指定を確認してください。";
             } else if(groups.Length>0 && ColorGroupAffectsPrint(kind) && Array.IndexOf(groups,SelectedGroup(kind,d))<0 && !IsUnlistedDepartment(kind,d))
-                return s.Layout=="CohortName"?"期生を半角数字で入力してください。":"区分を選択してラベルの色を確認してください。";
+                return s.Layout=="CohortName"?"期生を半角数字で入力してください。":(string.IsNullOrEmpty(s.ColorCaption)?"区分":s.ColorCaption)+"を選択してラベルの色を確認してください。";
             if(s.NeedsName && String.IsNullOrWhiteSpace(d.Person)) return s.Layout=="Surname"?"苗字を入力してください。":"名前を入力してください。";
             if(s.KatakanaOnly && !String.IsNullOrWhiteSpace(d.Person) && !IsKatakanaText(d.Person))
                 return "カタカナで入力してください（漢字では印字しません）。";
