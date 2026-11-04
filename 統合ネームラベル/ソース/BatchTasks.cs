@@ -27,6 +27,7 @@ namespace UnifiedLabels
         public int EmphasisStart = -1, EmphasisLength;
         public string ColorDepartment = "";
         public string Header = "", Role = "", Person = "", Number = "", Title = "";
+        public string CustomColor = "";
         public float HeaderFontPt, RoleFontPt, PersonFontPt, NumberFontPt;
         public bool HeaderFontSet, RoleFontSet, PersonFontSet, NumberFontSet;
 
@@ -36,7 +37,7 @@ namespace UnifiedLabels
             return new LabelDataSnapshot {
                 Digits=d.Digits, EmphasisStart=d.EmphasisStart, EmphasisLength=d.EmphasisLength,
                 ColorDepartment=d.ColorDepartment??"", Header=d.Header??"", Role=d.Role??"",
-                Person=d.Person??"", Number=d.Number??"", Title=d.Title??"",
+                Person=d.Person??"", Number=d.Number??"", Title=d.Title??"", CustomColor=d.CustomColor??"",
                 HeaderFontPt=d.HeaderFontPt, RoleFontPt=d.RoleFontPt, PersonFontPt=d.PersonFontPt, NumberFontPt=d.NumberFontPt,
                 HeaderFontSet=d.HeaderFontSet, RoleFontSet=d.RoleFontSet, PersonFontSet=d.PersonFontSet, NumberFontSet=d.NumberFontSet
             };
@@ -46,7 +47,7 @@ namespace UnifiedLabels
             return new LabelData {
                 Digits=Digits, EmphasisStart=EmphasisStart, EmphasisLength=EmphasisLength,
                 ColorDepartment=ColorDepartment??"", Header=Header??"", Role=Role??"",
-                Person=Person??"", Number=Number??"", Title=Title??"",
+                Person=Person??"", Number=Number??"", Title=Title??"", CustomColor=CustomColor??"",
                 HeaderFontPt=HeaderFontPt, RoleFontPt=RoleFontPt, PersonFontPt=PersonFontPt, NumberFontPt=NumberFontPt,
                 HeaderFontSet=HeaderFontSet, RoleFontSet=RoleFontSet, PersonFontSet=PersonFontSet, NumberFontSet=NumberFontSet
             };
@@ -119,6 +120,9 @@ namespace UnifiedLabels
             string error=LabelRenderer.Validate(kind,d);
             if(error!=null) return error;
             LabelSpec s=LabelCatalog.Items[kind];
+            // 一覧にない部署：印刷は可能だが、タスクにはラベル色の選択が必須
+            if(LabelCatalog.IsUnlistedDepartment(kind,d))
+                return string.IsNullOrWhiteSpace(d.CustomColor)?"一覧にない部署です。部署欄の下の「ラベル色」を選択してください。":null;
             string[] groups=LabelCatalog.ColorGroups(kind);
             if(groups.Length>0 && !LabelCatalog.ColorGroupAffectsPrint(kind)) {
                 if(Array.IndexOf(groups,LabelCatalog.SelectedGroup(kind,d))<0)
@@ -270,6 +274,7 @@ namespace UnifiedLabels
             n.SetAttribute("header",s.Header??"");
             n.SetAttribute("role",s.Role??"");
             n.SetAttribute("title",s.Title??"");
+            if(!string.IsNullOrEmpty(s.CustomColor)) n.SetAttribute("customColor",s.CustomColor);
             n.SetAttribute("person",s.Person??"");
             n.SetAttribute("number",s.Number??"");
             n.SetAttribute("hPt",s.HeaderFontPt.ToString(CultureInfo.InvariantCulture));
@@ -329,6 +334,7 @@ namespace UnifiedLabels
                 Header=n.GetAttribute("header"),
                 Role=n.GetAttribute("role"),
                 Title=n.GetAttribute("title"),
+                CustomColor=n.GetAttribute("customColor"),
                 Person=n.GetAttribute("person"),
                 Number=n.GetAttribute("number"),
                 HeaderFontPt=ParseFloat(n.GetAttribute("hPt")),
