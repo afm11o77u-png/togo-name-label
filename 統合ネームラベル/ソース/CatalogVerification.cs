@@ -127,7 +127,7 @@ namespace UnifiedLabels {
      if(row==42 || row==43) Need(spec.MaximumFont==36,"GOOD NEWS small 36pt");
     }
     if(row==250){
-     string[] expect={"赤","緑","青","赤","青","白","赤","白","青","白"};
+     string[] expect={"オレンジ","緑","青","オレンジ","青","白","オレンジ","白","青","白"};
      person.Text="テキ シホウ"; number.Text="1234567";
      for(int n=1;n<=10;n++){role.Text=n.ToString();Need(LabelCatalog.ColorName(active,Current())==expect[n-1],"Asahikawa cohort "+n);Need(LabelRenderer.Validate(active,Current())==null,"Asahikawa valid "+n);}
      role.Text="11"; Need(LabelCatalog.ColorName(active,Current())=="未指定","Asahikawa unknown unset");
@@ -136,12 +136,12 @@ namespace UnifiedLabels {
     if(row==251){
      person.Text="テキ シホウ"; number.Text="1234567";
      foreach(int n in new[]{1,2,3,4}){role.Text=n.ToString();Need(LabelCatalog.ColorName(active,Current())=="未指定","Hakodate 1-4 unset");Need(LabelRenderer.Validate(active,Current())!=null,"Hakodate 1-4 blocked");}
-     string[] expect=new string[]{"","","","","緑","青","赤","白"};
+     string[] expect=new string[]{"","","","","緑","青","オレンジ","白"};
      for(int n=5;n<=8;n++){role.Text=n.ToString();Need(LabelCatalog.ColorName(active,Current())==expect[n-1],"Hakodate "+n);Need(LabelRenderer.Validate(active,Current())==null,"Hakodate valid "+n);}
     }
     if(row==252){
      person.Text="テキ シホウ"; number.Text="1234567"; role.Text="1";
-     Need(LabelCatalog.ColorName(active,Current())=="赤","Hachiken 1");
+     Need(LabelCatalog.ColorName(active,Current())=="オレンジ","Hachiken 1");
      role.Text="2"; Need(LabelCatalog.ColorName(active,Current())=="未指定","Hachiken other unset");
     }
     if(row==254){
@@ -157,11 +157,11 @@ namespace UnifiedLabels {
    for(int i=0;i<LabelCatalog.Items.Length;i++){if(LabelCatalog.Items[i].Layout!="CohortName")continue; if(LabelCatalog.Items[i].Format.Contains("札幌"))sapporoCohort=i; if(LabelCatalog.Items[i].Format.Contains("旭川"))asahikawaCohort=i;}
    Need(sapporoCohort>=0 && asahikawaCohort>=0,"Cohort formats missing");
    kinds.SelectedIndex=sapporoCohort;person.Text="テキ シホウ";number.Text="1234567";
-   var sapporoColors=new[]{"赤","緑","青","白"};
+   var sapporoColors=new[]{"オレンジ","緑","青","白"};
    for(int n=1;n<=12;n++){role.Text=n.ToString();Need(LabelCatalog.ColorName(active,Current())==sapporoColors[(n-1)%4],"Sapporo cohort cycle");Need(LabelRenderer.Validate(active,Current())==null,"Sapporo cohort validation");}
    role.Text="5";CaptureLatest(folder,"cohort-sapporo");
    kinds.SelectedIndex=asahikawaCohort;person.Text="テキ シホウ";number.Text="1234567";
-   var asahiExpect=new[]{"赤","緑","青","赤","青","白","赤","白","青","白"};
+   var asahiExpect=new[]{"オレンジ","緑","青","オレンジ","青","白","オレンジ","白","青","白"};
    for(int n=1;n<=10;n++){role.Text=n.ToString();Need(LabelCatalog.ColorName(active,Current())==asahiExpect[n-1],"Asahikawa map "+n);}
    role.Text="5";CaptureLatest(folder,"cohort-asahikawa");
    kinds.SelectedIndex=LatestRow(56);person.Text="チャン ティ ハー ザン";number.Text="21";
