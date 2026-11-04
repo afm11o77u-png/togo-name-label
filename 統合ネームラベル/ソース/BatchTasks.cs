@@ -30,6 +30,7 @@ namespace UnifiedLabels
         public string CustomColor = "";
         public float HeaderFontPt, RoleFontPt, PersonFontPt, NumberFontPt;
         public bool HeaderFontSet, RoleFontSet, PersonFontSet, NumberFontSet;
+        public bool NameOnly;
 
         public static LabelDataSnapshot From(LabelData d)
         {
@@ -39,7 +40,8 @@ namespace UnifiedLabels
                 ColorDepartment=d.ColorDepartment??"", Header=d.Header??"", Role=d.Role??"",
                 Person=d.Person??"", Number=d.Number??"", Title=d.Title??"", CustomColor=d.CustomColor??"",
                 HeaderFontPt=d.HeaderFontPt, RoleFontPt=d.RoleFontPt, PersonFontPt=d.PersonFontPt, NumberFontPt=d.NumberFontPt,
-                HeaderFontSet=d.HeaderFontSet, RoleFontSet=d.RoleFontSet, PersonFontSet=d.PersonFontSet, NumberFontSet=d.NumberFontSet
+                HeaderFontSet=d.HeaderFontSet, RoleFontSet=d.RoleFontSet, PersonFontSet=d.PersonFontSet, NumberFontSet=d.NumberFontSet,
+                NameOnly=d.NameOnly
             };
         }
         public LabelData ToLabelData()
@@ -49,7 +51,8 @@ namespace UnifiedLabels
                 ColorDepartment=ColorDepartment??"", Header=Header??"", Role=Role??"",
                 Person=Person??"", Number=Number??"", Title=Title??"", CustomColor=CustomColor??"",
                 HeaderFontPt=HeaderFontPt, RoleFontPt=RoleFontPt, PersonFontPt=PersonFontPt, NumberFontPt=NumberFontPt,
-                HeaderFontSet=HeaderFontSet, RoleFontSet=RoleFontSet, PersonFontSet=PersonFontSet, NumberFontSet=NumberFontSet
+                HeaderFontSet=HeaderFontSet, RoleFontSet=RoleFontSet, PersonFontSet=PersonFontSet, NumberFontSet=NumberFontSet,
+                NameOnly=NameOnly
             };
         }
         public LabelDataSnapshot Clone() { return From(ToLabelData()); }
@@ -285,6 +288,7 @@ namespace UnifiedLabels
             n.SetAttribute("rSet",s.RoleFontSet?"1":"0");
             n.SetAttribute("pSet",s.PersonFontSet?"1":"0");
             n.SetAttribute("nSet",s.NumberFontSet?"1":"0");
+            if(s.NameOnly) n.SetAttribute("nameOnly","1");
             return n;
         }
         static BatchTask ReadTask(XmlElement n)
@@ -343,6 +347,7 @@ namespace UnifiedLabels
                 NumberFontPt=ParseFloat(n.GetAttribute("nPt")),
                 HeaderFontSet=n.GetAttribute("hSet")=="1",
                 RoleFontSet=n.GetAttribute("rSet")=="1",
+                NameOnly=n.GetAttribute("nameOnly")=="1",
                 PersonFontSet=n.GetAttribute("pSet")=="1",
                 NumberFontSet=n.GetAttribute("nSet")=="1"
             };
