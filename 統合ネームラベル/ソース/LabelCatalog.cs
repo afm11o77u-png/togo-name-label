@@ -19,8 +19,6 @@ namespace UnifiedLabels
         public string[] Titles;
         /// <summary>期生色の1始まり対応表。null＝Groups/Colorsの周期。空文字＝未設定。</summary>
         public string[] CohortColors;
-        /// <summary>名前のみ印字する期生（期生の丸数字・社員番号を付けない）。例：弁釜函館5期生。</summary>
-        public int[] NameOnlyCohorts;
         /// <summary>番号は任意（未入力なら番号行なしで印字。入力時は桁数を検証）。例：弁釜。</summary>
         public bool OptionalNumber;
         public bool SurnameOnly, SpaceSurname, StrictFont;
@@ -201,12 +199,6 @@ namespace UnifiedLabels
             foreach(string c in found) if(!result.Contains(c)) result.Add(c);
             return result.ToArray();
         }
-        /// <summary>この期生は名前のみ印字か（弁釜函館5期生など）。</summary>
-        public static bool IsNameOnlyCohort(LabelSpec s,LabelData d) {
-            if(s==null || d==null || s.Layout!="CohortName" || s.NameOnlyCohorts==null) return false;
-            int n; if(!Int32.TryParse((d.Role??"").Trim(),out n)) return false;
-            return Array.IndexOf(s.NameOnlyCohorts,n)>=0;
-        }
         public static string SelectedGroup(int kind,LabelData d) {
             if(Items[kind].ColorFromDepartment) return d.Header;
             if(Items[kind].Layout=="CohortName") {
@@ -345,7 +337,7 @@ namespace UnifiedLabels
             }
             if(s.Layout=="SplitCode" && !System.Text.RegularExpressions.Regex.IsMatch(d.Person.Trim(),@"^[A-Za-z]-[0-9]+$"))return "記号と番号を半角で入力してください（例：M-23）。";
             if(s.Layout=="MixedName" && !HasEmphasis(d)) return "名前の大きくする部分を選択し、「選択部分を大きく」を押してください。";
-            if(s.NeedsNumber && !LabelCatalog.IsNameOnlyCohort(s,d) && !(s.OptionalNumber && String.IsNullOrWhiteSpace(d.Number))) {
+            if(s.NeedsNumber && !(s.OptionalNumber && String.IsNullOrWhiteSpace(d.Number))) {
                 if(String.IsNullOrWhiteSpace(d.Number)) return "管理番号を入力してください。";
                 foreach(char c in d.Number) if(c<'0'||c>'9') return "管理番号は半角数字で入力してください。";
                 if(s.NumberLength>0 && d.Number.Length!=s.NumberLength) return "番号は半角数字"+s.NumberLength+"桁で入力してください。";
@@ -677,11 +669,9 @@ namespace UnifiedLabels
             if(s.Layout=="SizeNumber") name=(d.ColorDepartment.StartsWith("その他")?d.Header:d.ColorDepartment)+" "+d.Number;
             int value;
             if(s.Layout=="PrefixName") name=(Int32.TryParse(d.Number,out value)?Circled(value):d.Number)+(s.Reading=="半角カタカナ"?" ":"")+name;
-            // 名前のみの期生（弁釜函館5期生）は丸数字・社員番号を付けず、氏名だけを1段で印字
-            bool nameOnlyCohort=LabelCatalog.IsNameOnlyCohort(s,d);
             // 番号任意の形式（弁釜）で番号が空なら「社員番号：」行を出さず、本文だけを1段で印字
-            bool noNumberLine=nameOnlyCohort || (s.OptionalNumber && String.IsNullOrWhiteSpace(d.Number) && (s.Layout=="NumberName" || s.Layout=="CohortName"));
-            if(s.Layout=="CohortName" && !nameOnlyCohort) name=(Int32.TryParse(d.Role,out value)?Circled(value):d.Role)+" "+name;
+            bool noNumberLine=(s.OptionalNumber && String.IsNullOrWhiteSpace(d.Number) && (s.Layout=="NumberName" || s.Layout=="CohortName"));
+            if(s.Layout=="CohortName") name=(Int32.TryParse(d.Role,out value)?Circled(value):d.Role)+" "+name;
             if(s.Layout=="HeadingName" || (s.Layout=="NumberName" && !noNumberLine) || (s.Layout=="CohortName" && !noNumberLine) || s.Layout=="CompanyCodeName") {
                 string top=s.Layout=="HeadingName"?s.Heading:s.NumberPrefix+d.Number;
                 if(s.Layout=="CompanyCodeName") top=s.Heading+" "+(d.Number.Length==5?d.Number.Substring(0,1)+"-"+d.Number.Substring(1,2)+"-"+d.Number.Substring(3,2):d.Number);
