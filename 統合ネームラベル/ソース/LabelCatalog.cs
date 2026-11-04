@@ -201,10 +201,17 @@ namespace UnifiedLabels
             foreach(string c in found) if(!result.Contains(c)) result.Add(c);
             return result.ToArray();
         }
+        /// <summary>期生の数値化。前後の空白を除き、全角数字（０～９）も半角として受け付ける。</summary>
+        public static bool TryCohort(string text,out int value) {
+            value=0; if(text==null) return false;
+            System.Text.StringBuilder b=new System.Text.StringBuilder();
+            foreach(char c in text.Trim().Trim('　')) b.Append(c>='０' && c<='９'?(char)('0'+(c-'０')):c);
+            return Int32.TryParse(b.ToString(),System.Globalization.NumberStyles.None,System.Globalization.CultureInfo.InvariantCulture,out value);
+        }
         public static string SelectedGroup(int kind,LabelData d) {
             if(Items[kind].ColorFromDepartment) return d.Header;
             if(Items[kind].Layout=="CohortName") {
-                int n; if(!Int32.TryParse(d.Role,out n) || n<1) return "";
+                int n; if(!TryCohort(d.Role,out n) || n<1) return "";
                 LabelSpec cs=Items[kind];
                 if(cs.CohortColors!=null) {
                     if(n>cs.CohortColors.Length) return "";
@@ -224,7 +231,7 @@ namespace UnifiedLabels
         {
             if(Items[kind].Layout=="DeptOnly" && Items[kind].FixedColor=="緑？")return d.Header.Replace(" ","").Replace("　","")=="鮮魚"?"緑？":"先方から指定";
             if(Items[kind].Layout=="CohortName" && Items[kind].CohortColors!=null) {
-                int n; if(!Int32.TryParse(d.Role,out n) || n<1) return "未指定";
+                int n; if(!TryCohort(d.Role,out n) || n<1) return "未指定";
                 if(n>Items[kind].CohortColors.Length) return "未指定";
                 string c=Items[kind].CohortColors[n-1]??"";
                 return c==""?"未指定":c;
@@ -321,7 +328,7 @@ namespace UnifiedLabels
             string[] groups=ColorGroups(kind);
             // 色確認専用の Groups は任意。印字に使う区分（サイズ・期生・部署連動色）だけ必須。
             if(s.Layout=="CohortName" && s.CohortColors!=null) {
-                int cn; if(!Int32.TryParse(d.Role,out cn) || cn<1) return "期生を半角数字で入力してください。";
+                int cn; if(!TryCohort(d.Role,out cn) || cn<1) return "期生を数字で入力してください（例：5）。";
                 if(cn>s.CohortColors.Length || string.IsNullOrEmpty(s.CohortColors[cn-1]))
                     return "この期生の色は未設定です。色指定を確認してください。";
             } else if(groups.Length>0 && ColorGroupAffectsPrint(kind) && Array.IndexOf(groups,SelectedGroup(kind,d))<0 && !IsUnlistedDepartment(kind,d))
@@ -346,7 +353,7 @@ namespace UnifiedLabels
             }
             int numeric;
             if(s.Layout=="PrefixName" && (!Int32.TryParse(d.Number,out numeric) || numeric<1 || numeric>50)) return "丸数字の番号は1～50で入力してください。";
-            if(s.Layout=="CohortName" && (!Int32.TryParse(d.Role,out numeric) || numeric<1 || numeric>999)) return "期生は1～999で入力してください。";
+            if(s.Layout=="CohortName" && (!TryCohort(d.Role,out numeric) || numeric<1 || numeric>999)) return "期生は1～999で入力してください。";
             if(s.Layout=="DeptNumberName" && String.IsNullOrWhiteSpace(d.Header)) return "部署を入力してください。";
             if(s.Layout=="SizeNumber" && d.ColorDepartment.StartsWith("その他") && !System.Text.RegularExpressions.Regex.IsMatch(d.Header,@"^[3-9]\d*L$|^[12]\d+L$")) return "サイズを半角で入力してください（例：10L）。";
             if((s.Layout=="InitialName" || s.Layout=="InitialMixed") && d.Role.Replace('　',' ').Trim().Length>1) return "追加する名前は1文字で入力してください。";
@@ -675,7 +682,7 @@ namespace UnifiedLabels
             // 「名前のみ」（弁釜函館）：丸数字・社員番号を付けず、氏名だけを1段・中央で印字
             bool nameOnly=s.NameOnlyOption && d.NameOnly;
             bool noNumberLine=nameOnly || (s.OptionalNumber && String.IsNullOrWhiteSpace(d.Number) && (s.Layout=="NumberName" || s.Layout=="CohortName"));
-            if(s.Layout=="CohortName" && !nameOnly) name=(Int32.TryParse(d.Role,out value)?Circled(value):d.Role)+" "+name;
+            if(s.Layout=="CohortName" && !nameOnly) name=(TryCohort(d.Role,out value)?Circled(value):d.Role)+" "+name;
             if(s.Layout=="HeadingName" || (s.Layout=="NumberName" && !noNumberLine) || (s.Layout=="CohortName" && !noNumberLine) || s.Layout=="CompanyCodeName") {
                 string top=s.Layout=="HeadingName"?s.Heading:s.NumberPrefix+d.Number;
                 if(s.Layout=="CompanyCodeName") top=s.Heading+" "+(d.Number.Length==5?d.Number.Substring(0,1)+"-"+d.Number.Substring(1,2)+"-"+d.Number.Substring(3,2):d.Number);
