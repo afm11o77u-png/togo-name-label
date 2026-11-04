@@ -170,6 +170,33 @@ namespace UnifiedLabels
         }
         */
         public static string[] GroupColors(int kind) { return Items[kind].Colors; }
+        /// <summary>部署で色が決まる形式か（部署の直接入力を許可する対象）。性別・区分などは対象外。</summary>
+        public static bool DepartmentColorFreeInput(int kind) {
+            LabelSpec s=Items[kind];
+            if(s.Layout=="CohortName" || s.Layout=="SizeNumber") return false;
+            if(s.ColorFromDepartment) return DepartmentNames(kind)!=null;
+            return s.Groups!=null && s.Groups.Length>0 && s.ColorCaption=="部署";
+        }
+        /// <summary>部署を直接入力し、その部署が一覧にない（色が自動で決まらない）とき true。</summary>
+        public static bool IsUnlistedDepartment(int kind,LabelData d) {
+            if(d==null || !DepartmentColorFreeInput(kind)) return false;
+            string g=SelectedGroup(kind,d)??"";
+            return g.Trim()!="" && Array.IndexOf(ColorGroups(kind),g)<0;
+        }
+        /// <summary>アプリ内で使われているラベル色すべて（一覧にない部署の色選択用）。</summary>
+        public static string[] AllLabelColors() {
+            var found=new List<string>();
+            foreach(LabelSpec s in Items) if(s.Colors!=null) foreach(string c in s.Colors) {
+                string n=(c??"").Replace("?","").Replace("？","").Trim();
+                if(n!="" && n.IndexOf("指定",StringComparison.Ordinal)<0 && !found.Contains(n)) found.Add(n);
+            }
+            foreach(string c in DepartmentColors) if(!found.Contains(c)) found.Add(c);
+            string[] order={"白","青","緑","赤","黄","オレンジ"};
+            var result=new List<string>();
+            foreach(string c in order) if(found.Contains(c)) result.Add(c);
+            foreach(string c in found) if(!result.Contains(c)) result.Add(c);
+            return result.ToArray();
+        }
         public static string SelectedGroup(int kind,LabelData d) {
             if(Items[kind].ColorFromDepartment) return d.Header;
             if(Items[kind].Layout=="CohortName") {
@@ -201,7 +228,7 @@ namespace UnifiedLabels
             if(Items[kind].FixedColor!="") return Items[kind].FixedColor;
             string[] groups=ColorGroups(kind);
             // 未選択は「未指定」（白ラベル指定とは別。Swatch は中立の白背景のみ）
-            if(groups.Length>0) { int n=Array.IndexOf(groups,SelectedGroup(kind,d)); return n<0?"未指定":GroupColors(kind)[n]; }
+            if(groups.Length>0) { int n=Array.IndexOf(groups,SelectedGroup(kind,d)); if(n<0 && IsUnlistedDepartment(kind,d)) return string.IsNullOrEmpty(d.CustomColor)?"未指定":d.CustomColor; return n<0?"未指定":GroupColors(kind)[n]; }
             if(kind==20 || kind==23 || kind==24) return "緑";
             return Items[kind].White?"白":"先方から指定";
         }
@@ -293,8 +320,8 @@ namespace UnifiedLabels
                 int cn; if(!Int32.TryParse(d.Role,out cn) || cn<1) return "期生を半角数字で入力してください。";
                 if(cn>s.CohortColors.Length || string.IsNullOrEmpty(s.CohortColors[cn-1]))
                     return "この期生の色は未設定です。色指定を確認してください。";
-            } else if(groups.Length>0 && ColorGroupAffectsPrint(kind) && Array.IndexOf(groups,SelectedGroup(kind,d))<0)
-                return s.Layout=="CohortName"?"期生を半角数字で入力してください。":"区分を選択してラベルの色を確認してください。";
+            } else if(groups.Length>0 && ColorGroupAffectsPrint(kind) && Array.IndexOf(groups,SelectedGroup(kind,d))<0 && !IsUnlistedDepartment(kind,d))
+                return s.Layout=="CohortName"?"期生を半角数字で入力してください。":(string.IsNullOrEmpty(s.ColorCaption)?"区分":s.ColorCaption)+"を選択してラベルの色を確認してください。";
             if(s.NeedsName && String.IsNullOrWhiteSpace(d.Person)) return s.Layout=="Surname"?"苗字を入力してください。":"名前を入力してください。";
             if(s.KatakanaOnly && !String.IsNullOrWhiteSpace(d.Person) && !IsKatakanaText(d.Person))
                 return "カタカナで入力してください（漢字では印字しません）。";

@@ -16,6 +16,8 @@ namespace UnifiedLabels
         public string Header = "", Role = "", Person = "", Number = "";
         /// <summary>部署横に併記する任意役職（ふりがな用 Role とは別。明日佳・東苗穂など）。</summary>
         public string Title = "";
+        /// <summary>一覧にない部署を入力したときに選んだラベル色（タスク用）。一覧の部署では空。</summary>
+        public string CustomColor = "";
         // 欄ごとのフォントサイズ(pt)。*FontSet=false または無効値ならカタログ／自動調整の既定を使う。
         public float HeaderFontPt, RoleFontPt, PersonFontPt, NumberFontPt;
         public bool HeaderFontSet, RoleFontSet, PersonFontSet, NumberFontSet;
@@ -143,6 +145,11 @@ namespace UnifiedLabels
         /// <summary>先方から指定の形式向け。タスク登録時の発行色（プリンター見出しの直上）。</summary>
         readonly Label clientColorLabel = new Label();
         readonly ComboBox clientColor = new ComboBox();
+        // 一覧にない部署を入力したときだけ部署欄の下に出すラベル色（毎回選ぶ・記憶しない）
+        readonly Label deptColorLabel = new Label();
+        readonly ComboBox deptColor = new ComboBox();
+        bool deptColorUpdating;
+        string deptColorFor = "";
         int clientColorSlot;
         // 色帯は最大6枚（3行×2列）。鱗幸など赤・緑・青・白・黄の5色凡例を表示するため4枚から拡張。
         readonly Label[] colorLegend = {new Label(),new Label(),new Label(),new Label(),new Label(),new Label()};
@@ -309,8 +316,11 @@ public MainForm(string settingsFile)
             formats.DropDownWidth=480;
             Controls.Add(Caption("ラベル形式",LeftX,FormatCaptionTop)); Field(formats,LeftX,FormatFieldTop,300);
             headerLabel.Text="会社名 / 部署"; Field(headerLabel,LeftX,HeaderLabelTop,300); Field(header,LeftX,HeaderFieldTop,FieldWidth);
-            department.DropDownStyle=ComboBoxStyle.DropDownList; department.Items.AddRange(new object[] {"製造課 冷食", "製造課 ハムソー", "工務課", "商品開発課", "生産管理課", "総務課", "調達課", "品質保証部"}); Field(department,LeftX,HeaderFieldTop,FieldWidth); department.Visible=false;
+            // 部署は一覧から選ぶほか直接入力も可（入力中は一覧から候補を表示）
+            department.DropDownStyle=ComboBoxStyle.DropDown; department.AutoCompleteMode=AutoCompleteMode.SuggestAppend; department.AutoCompleteSource=AutoCompleteSource.ListItems; department.MaxLength=40; department.Items.AddRange(new object[] {"製造課 冷食", "製造課 ハムソー", "工務課", "商品開発課", "生産管理課", "総務課", "調達課", "品質保証部"}); Field(department,LeftX,HeaderFieldTop,FieldWidth); department.Visible=false;
             colorDepartment.DropDownStyle=ComboBoxStyle.DropDownList; colorDepartment.Items.AddRange(LabelCatalog.ColorDepartments); Field(colorDepartment,LeftX,HeaderFieldTop,FieldWidth); colorDepartment.Visible=false;
+            deptColorLabel.Text="ラベル色（一覧にない部署・タスク追加時に必要）"; Field(deptColorLabel,LeftX,RoleLabelTop,320); deptColorLabel.Visible=false;
+            deptColor.DropDownStyle=ComboBoxStyle.DropDownList; deptColor.Items.AddRange(LabelCatalog.AllLabelColors()); Field(deptColor,LeftX,RoleFieldTop,FieldWidth); deptColor.Visible=false;
             jobTitleLabel.Text="役職（任意）"; Field(jobTitleLabel,LeftX,RoleLabelTop,300); jobTitleLabel.Visible=false;
             jobTitle.DropDownStyle=ComboBoxStyle.DropDownList; Field(jobTitle,LeftX,RoleFieldTop,FieldWidth); jobTitle.Visible=false;
             roleLabel.Text="役職"; Field(roleLabel,LeftX,RoleLabelTop,300); Field(role,LeftX,RoleFieldTop,FieldWidth);
@@ -486,6 +496,10 @@ public MainForm(string settingsFile)
             digits.SelectedIndexChanged += delegate { if(!changing && active>=0 && active<2) { UpdateNumberGuide(); RefreshUnsetFontDefaults(); Safe(UpdateSample); UpdatePreview(); } };
             department.SelectedIndexChanged += delegate { if(!changing) {if(active>=0 && LabelCatalog.Items[active].ColorFromDepartment){UpdateNumberGuide();Safe(UpdateSample);}UpdatePreview();} };
             colorDepartment.SelectedIndexChanged += delegate { if(!changing && active>=0) { UpdateNumberGuide(); Safe(UpdateSample); UpdatePreview(); } };
+            // 直接入力中（一覧の項目が未確定）も色・プレビューを更新する。一覧から選んだときは SelectedIndexChanged 側で更新済み。
+            department.TextChanged += delegate { if(changing || active<0 || department.SelectedIndex>=0) return; UpdateNumberGuide(); Safe(UpdateSample); UpdatePreview(); };
+            colorDepartment.TextChanged += delegate { if(changing || active<0 || colorDepartment.SelectedIndex>=0 || colorDepartment.DropDownStyle!=ComboBoxStyle.DropDown) return; UpdateNumberGuide(); Safe(UpdateSample); UpdatePreview(); };
+            deptColor.SelectedIndexChanged += delegate { if(changing || deptColorUpdating || active<0) return; UpdateNumberGuide(); Safe(UpdateSample); UpdatePreview(); };
             foreach (TextBox box in new TextBox[] {header,role,person,number}) box.TextChanged += delegate { if(!changing) { if(active>=0 && (LabelCatalog.Items[active].Layout=="CohortName" || LabelCatalog.Items[active].Layout=="DeptOnly")) {UpdateNumberGuide(); Safe(UpdateSample);} RefreshUnsetFontDefaults(); UpdatePreview(); } };
             jobTitle.SelectedIndexChanged += delegate { if(!changing) { if(active>=0) drafts[active].Title=jobTitle.Text??""; UpdatePreview(); } };
             headerFont.ValueChanged += delegate { if(changing || active<0) return; drafts[active].HeaderFontSet=true; drafts[active].HeaderFontPt=(float)headerFont.Value; UpdatePreview(); };
@@ -540,8 +554,8 @@ public MainForm(string settingsFile)
         }
         void BringInputRowsToFront() {
             // ラベル背景が入力欄を覆って潰れて見えるのを防ぐ（会社名行が典型）。
-            foreach(Control c in new Control[]{headerLabel,roleLabel,jobTitleLabel,personLabel,numberLabel}) c.SendToBack();
-            foreach(Control c in new Control[]{header,role,person,number,department,colorDepartment,jobTitle,
+            foreach(Control c in new Control[]{headerLabel,roleLabel,jobTitleLabel,personLabel,numberLabel,deptColorLabel}) c.SendToBack();
+            foreach(Control c in new Control[]{header,role,person,number,department,colorDepartment,deptColor,jobTitle,
                 headerFont,roleFont,personFont,numberFont,headerFontUnit,roleFontUnit,personFontUnit,numberFontUnit})
                 c.BringToFront();
         }
@@ -557,15 +571,18 @@ public MainForm(string settingsFile)
             bool colorInRoleRow = colorWithDept || colorWithHeader;
 
             if(headerLabel.Visible) { headerLabel.Top = y; y += CaptionToField; }
+            bool deptColorPlaced = false;
             if(department.Visible) {
                 department.Top = y; EnsurePreferredHeight(department);
                 y = department.Bottom + AfterFieldGap;
+                if(!colorInRoleRow) { y = PlaceDeptColor(y); deptColorPlaced = true; }
             } else if(header.Visible && !sizeNumber) {
                 header.Top = y; EnsurePreferredHeight(header);
                 y = header.Bottom + AfterFieldGap;
             } else if(colorAsHeader) {
                 colorDepartment.Top = y; EnsurePreferredHeight(colorDepartment);
                 y = colorDepartment.Bottom + AfterFieldGap;
+                y = PlaceDeptColor(y); deptColorPlaced = true;
             } else if(headerLabel.Visible && !sizeNumber) {
                 y += FieldHeight + AfterFieldGap;
             }
@@ -590,11 +607,13 @@ public MainForm(string settingsFile)
                 } else if(colorInRoleRow) {
                     colorDepartment.Top = y; EnsurePreferredHeight(colorDepartment);
                     y = colorDepartment.Bottom + AfterFieldGap;
+                    y = PlaceDeptColor(y); deptColorPlaced = true;
                 } else {
                     y += AfterFieldGap;
                 }
             }
 
+            if(!deptColorPlaced) y = PlaceDeptColor(y);
             if(personLabel.Visible || person.Visible) {
                 if(personLabel.Visible) { personLabel.Top = y; y += CaptionToField; }
                 if(person.Visible) {
@@ -621,6 +640,30 @@ public MainForm(string settingsFile)
                 emphasisGuide.Top = emphasize.Bottom + 4;
             }
             BringInputRowsToFront();
+        }
+        /// <summary>一覧にない部署のラベル色欄を部署欄の直下に置く（非表示なら何もしない）。</summary>
+        int PlaceDeptColor(int y) {
+            if(!deptColor.Visible) return y;
+            deptColorLabel.Top = y; y += CaptionToField;
+            deptColor.Top = y; EnsurePreferredHeight(deptColor);
+            return deptColor.Bottom + AfterFieldGap;
+        }
+        /// <summary>部署が一覧にないときだけラベル色欄を出す。部署の入力が変わったら選択は毎回クリア（記憶しない）。</summary>
+        void UpdateDeptColorField() {
+            if(deptColorUpdating) return;
+            deptColorUpdating=true;
+            try {
+                LabelData d=active>=0?Current():null;
+                bool show=d!=null && LabelCatalog.IsUnlistedDepartment(active,d);
+                string key=show?active+"|"+LabelCatalog.SelectedGroup(active,d):"";
+                if(key!=deptColorFor) { deptColor.SelectedIndex=-1; deptColorFor=key; }
+                if(deptColor.Visible!=show) {
+                    deptColor.Visible=deptColorLabel.Visible=show;
+                    LayoutInputStack(LabelCatalog.Items[active]);
+                    bool prev=changing; changing=true;
+                    try { UpdateFontControls(); } finally { changing=prev; }
+                }
+            } finally { deptColorUpdating=false; }
         }
         void SetupFontBox(NumericUpDown box, Label unit) {
             box.Minimum=6; box.Maximum=120; box.DecimalPlaces=0; box.Increment=1; box.Value=18;
@@ -675,6 +718,7 @@ public MainForm(string settingsFile)
                 Header=(LabelCatalog.DepartmentNames(active)!=null?department.Text:header.Text).Replace('　',' '),
                 Role=role.Text.Replace('　',' '), Person=person.Text.Replace('　',' '), Number=number.Text.Replace('　',' '),
                 Title=jobTitle.Visible?(jobTitle.Text??"").Replace('　',' '):(drafts[active].Title??""),
+                CustomColor=deptColor.Visible && deptColor.SelectedIndex>=0?deptColor.Text:"",
                 Digits=digits.SelectedIndex==1?5:4,
                 ColorDepartment=LabelCatalog.ColorGroups(active).Length>0?colorDepartment.Text:drafts[active].ColorDepartment,
                 EmphasisStart=emphasisStart, EmphasisLength=emphasisLength,
@@ -742,7 +786,7 @@ public MainForm(string settingsFile)
             else headerLabel.Visible=true;
             string[] departments=LabelCatalog.DepartmentNames(active);
             department.Items.Clear(); department.Visible=departments!=null;
-            if(departments!=null) { department.Items.AddRange(departments); department.SelectedItem=d.Header; header.Visible=false; headerLabel.Visible=true; headerLabel.Text="部署"; }
+            if(departments!=null) { department.Items.AddRange(departments); department.SelectedItem=d.Header; if(department.SelectedIndex<0) department.Text=d.Header??""; header.Visible=false; headerLabel.Visible=true; headerLabel.Text="部署"; }
             role.Visible=roleLabel.Visible=active==3 || spec.Layout=="QR";
             roleLabel.Text="役職"; role.MaxLength=20;
             if(spec.Layout=="DeptRoleName") {role.Visible=roleLabel.Visible=true;roleLabel.Text="役職（ない場合は空欄）";}
@@ -764,10 +808,19 @@ public MainForm(string settingsFile)
             if(spec.Layout=="StarRoman") {header.Visible=headerLabel.Visible=true;header.ReadOnly=false;header.MaxLength=100;header.Text=d.Header;headerLabel.Text="苗字（ローマ字）";role.Visible=roleLabel.Visible=true;roleLabel.Text="☆の数（なし＝0）";role.MaxLength=2;if(role.Text=="")role.Text="0";}
             if(spec.Layout=="DeptOnly" || spec.Layout=="OptionalHeading") {header.Visible=headerLabel.Visible=true;header.ReadOnly=false;header.MaxLength=40;header.Text=d.Header;headerLabel.Text=spec.Layout=="DeptOnly"?"部署名（印字する内容）":"部署名（空欄なら氏名のみ）";}
             if(spec.Layout=="DeptNumberName") { header.Visible=headerLabel.Visible=true; header.ReadOnly=false; header.MaxLength=30; header.Text=d.Header; headerLabel.Text="部署（印字する内容）"; }
+            // 部署で色が決まる区分（見出し「部署」）は直接入力可。それ以外（性別・区分など）は従来どおり一覧から選ぶだけ。
+            bool freeColorDept=LabelCatalog.DepartmentColorFreeInput(active) && !spec.ColorFromDepartment;
             colorDepartment.Items.Clear();
+            colorDepartment.DropDownStyle=freeColorDept?ComboBoxStyle.DropDown:ComboBoxStyle.DropDownList;
+            colorDepartment.AutoCompleteMode=freeColorDept?AutoCompleteMode.SuggestAppend:AutoCompleteMode.None;
+            colorDepartment.AutoCompleteSource=freeColorDept?AutoCompleteSource.ListItems:AutoCompleteSource.None;
+            colorDepartment.MaxLength=freeColorDept?40:0;
             string[] groups=LabelCatalog.ColorGroups(active);
             colorDepartment.Items.AddRange(groups);
             colorDepartment.Visible=groups.Length>0 && spec.Layout!="CohortName" && !spec.ColorFromDepartment; colorDepartment.SelectedItem=d.ColorDepartment;
+            if(freeColorDept && colorDepartment.SelectedIndex<0) colorDepartment.Text=d.ColorDepartment??"";
+            // 形式を切り替えたら、一覧にない部署のラベル色は選び直し（記憶しない）
+            deptColorUpdating=true; deptColor.SelectedIndex=-1; deptColor.Visible=deptColorLabel.Visible=false; deptColorFor=""; deptColorUpdating=false;
             if(groups.Length>0 && spec.Layout!="CohortName" && !spec.ColorFromDepartment) {
                 string caption=spec.ColorCaption+"（ラベル色）";
                 // OptionalHeading は上段自由入力を残し、色選択だけ役職行へ出す（鱗幸など）。
@@ -817,6 +870,7 @@ public MainForm(string settingsFile)
             // 高さ確定後に同Y・重なりを矯正（Resize より前だと青帯が緑帯に隠れることがある）
             EnsurePlacementBandStack();
             UpdateClientColorField();
+            UpdateDeptColorField();
         }
         /// <summary>先方から指定のときだけ、プリンター見出しの直上にタスク用色入力を出す。</summary>
         void UpdateClientColorField()
