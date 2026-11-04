@@ -833,7 +833,7 @@ public MainForm(string settingsFile)
             if(spec.InputCaption!="")personLabel.Text=spec.InputCaption;
             number.Visible=numberLabel.Visible=spec.NeedsNumber;
             numberLabel.Text=active<4 || spec.Layout=="QR"?"社員番号（コードに変換する内容）":"管理番号（印字する番号）";
-            if(spec.NumberLength>0) numberLabel.Text=(spec.Layout=="NumberName" || spec.Layout=="CohortName"?"社員番号":"番号")+"（数字"+spec.NumberLength+"桁）";
+            if(spec.NumberLength>0) numberLabel.Text=(spec.Layout=="NumberName" || spec.Layout=="CohortName"?"社員番号":"番号")+"（数字"+spec.NumberLength+"桁"+(spec.OptionalNumber?"・未入力可":"")+"）";
             if(spec.Layout=="PrefixName") numberLabel.Text="丸数字の番号（1～50）";
 
             LayoutInputStack(spec);
