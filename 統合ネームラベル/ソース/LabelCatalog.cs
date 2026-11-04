@@ -19,6 +19,10 @@ namespace UnifiedLabels
         public string[] Titles;
         /// <summary>期生色の1始まり対応表。null＝Groups/Colorsの周期。空文字＝未設定。</summary>
         public string[] CohortColors;
+        /// <summary>番号は任意（未入力なら番号行なしで印字。入力時は桁数を検証）。例：弁釜。</summary>
+        public bool OptionalNumber;
+        /// <summary>「名前のみ」チェックを表示（期生の丸数字・社員番号を印字しない。色は期生で決定）。例：弁釜函館実習生。</summary>
+        public bool NameOnlyOption;
         public bool SurnameOnly, SpaceSurname, StrictFont;
         public bool SurnameSizing, ColorFromDepartment, UnknownSize, IndentUpper;
         /// <summary>当該形式だけ MS PGothic 等を太字にする（StyleFor のファミリ一律変更はしない）。</summary>
@@ -335,7 +339,7 @@ namespace UnifiedLabels
             }
             if(s.Layout=="SplitCode" && !System.Text.RegularExpressions.Regex.IsMatch(d.Person.Trim(),@"^[A-Za-z]-[0-9]+$"))return "記号と番号を半角で入力してください（例：M-23）。";
             if(s.Layout=="MixedName" && !HasEmphasis(d)) return "名前の大きくする部分を選択し、「選択部分を大きく」を押してください。";
-            if(s.NeedsNumber) {
+            if(s.NeedsNumber && !(s.NameOnlyOption && d.NameOnly) && !(s.OptionalNumber && String.IsNullOrWhiteSpace(d.Number))) {
                 if(String.IsNullOrWhiteSpace(d.Number)) return "管理番号を入力してください。";
                 foreach(char c in d.Number) if(c<'0'||c>'9') return "管理番号は半角数字で入力してください。";
                 if(s.NumberLength>0 && d.Number.Length!=s.NumberLength) return "番号は半角数字"+s.NumberLength+"桁で入力してください。";
@@ -667,8 +671,12 @@ namespace UnifiedLabels
             if(s.Layout=="SizeNumber") name=(d.ColorDepartment.StartsWith("その他")?d.Header:d.ColorDepartment)+" "+d.Number;
             int value;
             if(s.Layout=="PrefixName") name=(Int32.TryParse(d.Number,out value)?Circled(value):d.Number)+(s.Reading=="半角カタカナ"?" ":"")+name;
-            if(s.Layout=="CohortName") name=(Int32.TryParse(d.Role,out value)?Circled(value):d.Role)+" "+name;
-            if(s.Layout=="HeadingName" || s.Layout=="NumberName" || s.Layout=="CohortName" || s.Layout=="CompanyCodeName") {
+            // 番号任意の形式（弁釜）で番号が空なら「社員番号：」行を出さず、本文だけを1段で印字
+            // 「名前のみ」（弁釜函館）：丸数字・社員番号を付けず、氏名だけを1段・中央で印字
+            bool nameOnly=s.NameOnlyOption && d.NameOnly;
+            bool noNumberLine=nameOnly || (s.OptionalNumber && String.IsNullOrWhiteSpace(d.Number) && (s.Layout=="NumberName" || s.Layout=="CohortName"));
+            if(s.Layout=="CohortName" && !nameOnly) name=(Int32.TryParse(d.Role,out value)?Circled(value):d.Role)+" "+name;
+            if(s.Layout=="HeadingName" || (s.Layout=="NumberName" && !noNumberLine) || (s.Layout=="CohortName" && !noNumberLine) || s.Layout=="CompanyCodeName") {
                 string top=s.Layout=="HeadingName"?s.Heading:s.NumberPrefix+d.Number;
                 if(s.Layout=="CompanyCodeName") top=s.Heading+" "+(d.Number.Length==5?d.Number.Substring(0,1)+"-"+d.Number.Substring(1,2)+"-"+d.Number.Substring(3,2):d.Number);
                 float topPt=s.HeadingFont>0?s.HeadingFont:s.Layout=="HeadingName"?12:18;

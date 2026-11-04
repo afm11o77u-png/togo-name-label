@@ -21,6 +21,8 @@ namespace UnifiedLabels
         // 欄ごとのフォントサイズ(pt)。*FontSet=false または無効値ならカタログ／自動調整の既定を使う。
         public float HeaderFontPt, RoleFontPt, PersonFontPt, NumberFontPt;
         public bool HeaderFontSet, RoleFontSet, PersonFontSet, NumberFontSet;
+        /// <summary>「名前のみ」印字（NameOnlyOption の形式だけ有効）。</summary>
+        public bool NameOnly;
     }
 
     public static class LabelRenderer
@@ -140,6 +142,8 @@ namespace UnifiedLabels
         readonly ComboBox colorDepartment = new ComboBox();
         /// <summary>部署横の任意役職（ふりがな Role とは別）。Titles 付き形式のみ表示。</summary>
         readonly ComboBox jobTitle = new ComboBox();
+        /// <summary>「名前のみ」（期生の丸数字・社員番号を印字しない）。NameOnlyOption の形式のみ表示。</summary>
+        readonly CheckBox nameOnly = new CheckBox();
         readonly Label jobTitleLabel = new Label();
         readonly Label sampleColor = new Label();
         /// <summary>先方から指定の形式向け。タスク登録時の発行色（プリンター見出しの直上）。</summary>
@@ -330,6 +334,7 @@ public MainForm(string settingsFile)
             personSpaceNote.ForeColor=Color.FromArgb(80,80,80);
             Field(personSpaceNote,LeftX,PersonNoteTop,300); personSpaceNote.Height=14;
             numberLabel.Text="社員番号（コードに変換する内容）"; Field(numberLabel,LeftX,NumberLabelTop,300); Field(number,LeftX,NumberFieldTop,FieldWidth);
+            nameOnly.Text="名前のみ（期生の丸数字・社員番号を印字しない）"; Field(nameOnly,LeftX,ExtraRowTop,320); nameOnly.Visible=false;
             SetupFontBox(headerFont, headerFontUnit); SetupFontBox(roleFont, roleFontUnit); SetupFontBox(personFont, personFontUnit); SetupFontBox(numberFont, numberFontUnit);
             headerFont.Top=HeaderFieldTop; headerFontUnit.Top=HeaderFieldTop;
             roleFont.Top=RoleFieldTop; roleFontUnit.Top=RoleFieldTop;
@@ -501,6 +506,7 @@ public MainForm(string settingsFile)
             colorDepartment.TextChanged += delegate { if(changing || active<0 || colorDepartment.SelectedIndex>=0 || colorDepartment.DropDownStyle!=ComboBoxStyle.DropDown) return; UpdateNumberGuide(); Safe(UpdateSample); UpdatePreview(); };
             deptColor.SelectedIndexChanged += delegate { if(changing || deptColorUpdating || active<0) return; UpdateNumberGuide(); Safe(UpdateSample); UpdatePreview(); };
             foreach (TextBox box in new TextBox[] {header,role,person,number}) box.TextChanged += delegate { if(!changing) { if(active>=0 && (LabelCatalog.Items[active].Layout=="CohortName" || LabelCatalog.Items[active].Layout=="DeptOnly")) {UpdateNumberGuide(); Safe(UpdateSample);} RefreshUnsetFontDefaults(); UpdatePreview(); } };
+            nameOnly.CheckedChanged += delegate { if(!changing && active>=0) { drafts[active].NameOnly=nameOnly.Checked; UpdatePreview(); } };
             jobTitle.SelectedIndexChanged += delegate { if(!changing) { if(active>=0) drafts[active].Title=jobTitle.Text??""; UpdatePreview(); } };
             headerFont.ValueChanged += delegate { if(changing || active<0) return; drafts[active].HeaderFontSet=true; drafts[active].HeaderFontPt=(float)headerFont.Value; UpdatePreview(); };
             roleFont.ValueChanged += delegate { if(changing || active<0) return; drafts[active].RoleFontSet=true; drafts[active].RoleFontPt=(float)roleFont.Value; UpdatePreview(); };
@@ -555,7 +561,7 @@ public MainForm(string settingsFile)
         void BringInputRowsToFront() {
             // ラベル背景が入力欄を覆って潰れて見えるのを防ぐ（会社名行が典型）。
             foreach(Control c in new Control[]{headerLabel,roleLabel,jobTitleLabel,personLabel,numberLabel,deptColorLabel}) c.SendToBack();
-            foreach(Control c in new Control[]{header,role,person,number,department,colorDepartment,deptColor,jobTitle,
+            foreach(Control c in new Control[]{header,role,person,number,department,colorDepartment,deptColor,jobTitle,nameOnly,
                 headerFont,roleFont,personFont,numberFont,headerFontUnit,roleFontUnit,personFontUnit,numberFontUnit})
                 c.BringToFront();
         }
@@ -633,6 +639,7 @@ public MainForm(string settingsFile)
                     y = number.Bottom + AfterFieldGap;
                 }
             }
+            if(nameOnly.Visible) { nameOnly.Top = y; y = nameOnly.Bottom + AfterFieldGap; }
 
             if(digits.Visible) { digits.Top = y; y = digits.Bottom + AfterFieldGap; }
             if(emphasize.Visible) {
@@ -722,6 +729,7 @@ public MainForm(string settingsFile)
                 Digits=digits.SelectedIndex==1?5:4,
                 ColorDepartment=LabelCatalog.ColorGroups(active).Length>0?colorDepartment.Text:drafts[active].ColorDepartment,
                 EmphasisStart=emphasisStart, EmphasisLength=emphasisLength,
+                NameOnly=nameOnly.Visible && nameOnly.Checked,
                 HeaderFontSet=drafts[active].HeaderFontSet, HeaderFontPt=drafts[active].HeaderFontPt,
                 RoleFontSet=drafts[active].RoleFontSet, RoleFontPt=drafts[active].RoleFontPt,
                 PersonFontSet=drafts[active].PersonFontSet, PersonFontPt=drafts[active].PersonFontPt,
@@ -832,8 +840,9 @@ public MainForm(string settingsFile)
             personLabel.Text=(spec.SurnameOnly || spec.Layout=="Surname"?"苗字":"名前")+(spec.Reading!=""?"（"+spec.Reading+"で入力）":spec.SurnameOnly || spec.Layout=="Surname"?"（苗字のみ印字）":"（フルネーム）");
             if(spec.InputCaption!="")personLabel.Text=spec.InputCaption;
             number.Visible=numberLabel.Visible=spec.NeedsNumber;
+            nameOnly.Visible=spec.NameOnlyOption; nameOnly.Checked=spec.NameOnlyOption && d.NameOnly;
             numberLabel.Text=active<4 || spec.Layout=="QR"?"社員番号（コードに変換する内容）":"管理番号（印字する番号）";
-            if(spec.NumberLength>0) numberLabel.Text=(spec.Layout=="NumberName" || spec.Layout=="CohortName"?"社員番号":"番号")+"（数字"+spec.NumberLength+"桁）";
+            if(spec.NumberLength>0) numberLabel.Text=(spec.Layout=="NumberName" || spec.Layout=="CohortName"?"社員番号":"番号")+"（数字"+spec.NumberLength+"桁"+(spec.OptionalNumber?"・未入力可":"")+"）";
             if(spec.Layout=="PrefixName") numberLabel.Text="丸数字の番号（1～50）";
 
             LayoutInputStack(spec);
