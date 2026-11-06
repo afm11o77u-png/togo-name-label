@@ -318,6 +318,51 @@ namespace UnifiedLabels
             return paren>0?s.Substring(0,paren):format;
         }
         public static Size Millimetres(int kind) { return Items[kind].Small?new Size(50,24):new Size(80,50); }
+        /// <summary>函館みかど（CompanyCodeName）の番号1欄あたりの最大桁。1～2桁が原則で、少し余裕を持たせる。</summary>
+        public const int CompanyCodePartMaxLength=4;
+        /// <summary>3欄をハイフン結合したときの最大文字数（4-4-4）。</summary>
+        public const int CompanyCodeNumberMaxLength=14;
+        public static bool IsHalfWidthDigits(string value) {
+            if(string.IsNullOrEmpty(value)) return false;
+            for(int i=0;i<value.Length;i++) if(value[i]<'0' || value[i]>'9') return false;
+            return true;
+        }
+        public static string HalfWidthDigits(string value) {
+            if(string.IsNullOrEmpty(value)) return "";
+            var sb=new System.Text.StringBuilder(value.Length);
+            foreach(char c in value) if(c>='0' && c<='9') sb.Append(c);
+            return sb.ToString();
+        }
+        /// <summary>保存文字列を3欄へ分ける。新形式「1-3-6」「0-12-03」。旧5桁「12345」は1・23・45。</summary>
+        public static bool TrySplitCompanyCodeNumber(string number, out string first, out string second, out string third) {
+            first=second=third="";
+            string n=(number??"").Replace('　',' ').Trim();
+            if(n.Length==5 && IsHalfWidthDigits(n)) {
+                first=n.Substring(0,1); second=n.Substring(1,2); third=n.Substring(3,2);
+                return true;
+            }
+            int h1=n.IndexOf('-');
+            if(h1<=0) return false;
+            int h2=n.IndexOf('-', h1+1);
+            if(h2<0 || n.IndexOf('-', h2+1)>=0) return false;
+            first=n.Substring(0,h1);
+            second=n.Substring(h1+1, h2-h1-1);
+            third=n.Substring(h2+1);
+            if(!IsHalfWidthDigits(first) || !IsHalfWidthDigits(second) || !IsHalfWidthDigits(third)) return false;
+            if(first.Length>CompanyCodePartMaxLength || second.Length>CompanyCodePartMaxLength || third.Length>CompanyCodePartMaxLength) return false;
+            return true;
+        }
+        public static string JoinCompanyCodeNumber(string first, string second, string third) {
+            first=HalfWidthDigits(first); second=HalfWidthDigits(second); third=HalfWidthDigits(third);
+            if(first.Length==0 && second.Length==0 && third.Length==0) return "";
+            return first+"-"+second+"-"+third;
+        }
+        /// <summary>印字用。3欄が揃ったときだけ「1-3-6」。揃っていなければ空（余分なハイフンは出さない）。</summary>
+        public static string CompanyCodeNumberForPrint(string number) {
+            string a,b,c;
+            if(!TrySplitCompanyCodeNumber(number, out a, out b, out c)) return "";
+            return a+"-"+b+"-"+c;
+        }
         public static string Validate(int kind,LabelData d)
         {
             LabelSpec s=Items[kind];
@@ -348,7 +393,12 @@ namespace UnifiedLabels
             }
             if(s.Layout=="SplitCode" && !System.Text.RegularExpressions.Regex.IsMatch(d.Person.Trim(),@"^[A-Za-z]-[0-9]+$"))return "記号と番号を半角で入力してください（例：M-23）。";
             if(s.Layout=="MixedName" && !HasEmphasis(d)) return "名前の大きくする部分を選択し、「選択部分を大きく」を押してください。";
-            if(s.NeedsNumber && !(s.NameOnlyOption && d.NameOnly) && !(s.OptionalNumber && String.IsNullOrWhiteSpace(d.Number))) {
+            if(s.Layout=="CompanyCodeName") {
+                if(String.IsNullOrWhiteSpace(d.Number)) return "番号を入力してください。";
+                string part1, part2, part3;
+                if(!TrySplitCompanyCodeNumber(d.Number, out part1, out part2, out part3))
+                    return "番号は3欄すべて半角数字で入力してください。";
+            } else if(s.NeedsNumber && !(s.NameOnlyOption && d.NameOnly) && !(s.OptionalNumber && String.IsNullOrWhiteSpace(d.Number))) {
                 if(String.IsNullOrWhiteSpace(d.Number)) return "管理番号を入力してください。";
                 foreach(char c in d.Number) if(c<'0'||c>'9') return "管理番号は半角数字で入力してください。";
                 if(s.NumberLength>0 && d.Number.Length!=s.NumberLength) return "番号は半角数字"+s.NumberLength+"桁で入力してください。";
@@ -687,7 +737,10 @@ namespace UnifiedLabels
             if(s.Layout=="CohortName" && !nameOnly) name=(TryCohort(d.Role,out value)?Circled(value):d.Role)+" "+name;
             if(s.Layout=="HeadingName" || (s.Layout=="NumberName" && !noNumberLine) || (s.Layout=="CohortName" && !noNumberLine) || s.Layout=="CompanyCodeName") {
                 string top=s.Layout=="HeadingName"?s.Heading:s.NumberPrefix+d.Number;
-                if(s.Layout=="CompanyCodeName") top=s.Heading+" "+(d.Number.Length==5?d.Number.Substring(0,1)+"-"+d.Number.Substring(1,2)+"-"+d.Number.Substring(3,2):d.Number);
+                if(s.Layout=="CompanyCodeName") {
+                    string code=CompanyCodeNumberForPrint(d.Number);
+                    top=code.Length==0?s.Heading:s.Heading+" "+code;
+                }
                 float topPt=s.HeadingFont>0?s.HeadingFont:s.Layout=="HeadingName"?12:18;
                 if(s.Layout=="HeadingName") topPt=PickFont(topPt,d.HeaderFontSet,d.HeaderFontPt);
                 if(s.Layout=="NumberName" || s.Layout=="CompanyCodeName") topPt=PickFont(topPt,d.NumberFontSet,d.NumberFontPt);
