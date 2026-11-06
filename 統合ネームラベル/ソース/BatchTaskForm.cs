@@ -127,7 +127,7 @@ namespace UnifiedLabels
                 int i=grid.Rows.Add(
                     BatchValidation.StatusText(t.Status),
                     t.CustomerName, t.FormatName, t.Small?"小":"大",
-                    t.ColorGroup, t.Data.Person, t.Data.Number, t.Data.ColorDepartment,
+                    t.ColorGroup, t.Data.Person, ShownNumber(t.Kind, t.Data.Number), t.Data.ColorDepartment,
                     t.Copies.ToString(), t.UpdatedAt.ToString("yyyy-MM-dd HH:mm"), t.Id);
                 grid.Rows[i].Tag=t;
             }
@@ -257,13 +257,13 @@ namespace UnifiedLabels
             StringBuilder sb=new StringBuilder();
             sb.AppendLine(t.CustomerName+" / "+t.FormatName+" / "+t.Data.Person);
             sb.AppendLine("現在状態: "+BatchValidation.StatusText(t.Status));
-            sb.AppendLine("内容: 区分="+t.Data.ColorDepartment+" 部署="+t.Data.Header+" 番号="+t.Data.Number+" 色="+t.ColorGroup);
+            sb.AppendLine("内容: 区分="+t.Data.ColorDepartment+" 部署="+t.Data.Header+" 番号="+ShownNumber(t.Kind, t.Data.Number)+" 色="+t.ColorGroup);
             sb.AppendLine("--- 履歴 ---");
             if(t.History.Count==0) sb.AppendLine("（なし）");
             foreach(BatchPrintHistoryEntry h in t.History) {
                 sb.AppendLine(h.At.ToString("yyyy-MM-dd HH:mm:ss")+" ["+BatchValidation.StatusText(h.StatusAfter)+"] "
                     +(h.IsReprint?"再印刷 ":"")+h.Note+" 色="+h.ColorGroup
-                    +" 氏名="+h.Content.Person+" 番号="+h.Content.Number);
+                    +" 氏名="+h.Content.Person+" 番号="+ShownNumber(t.Kind, h.Content.Number));
             }
             MessageBox.Show(this,sb.ToString(),"印刷履歴");
         }
@@ -336,6 +336,13 @@ namespace UnifiedLabels
             issueLog.AppendText(summary+"\r\n");
             MessageBox.Show(this,summary,"一括発行");
         }
+        static string ShownNumber(int kind, string number) {
+            if(kind>=0 && kind<LabelCatalog.Items.Length && LabelCatalog.Items[kind].Layout=="CompanyCodeName") {
+                string shown=LabelCatalog.CompanyCodeNumberForPrint(number);
+                if(shown.Length>0) return shown;
+            }
+            return number??"";
+        }
     }
 
     sealed class BatchTaskEditDialog : Form
@@ -345,15 +352,18 @@ namespace UnifiedLabels
         readonly TextBox role=new TextBox();
         readonly TextBox person=new TextBox();
         readonly TextBox number=new TextBox();
+        readonly TextBox code1=new TextBox(), code2=new TextBox(), code3=new TextBox();
         readonly ComboBox color=new ComboBox();
         readonly ComboBox clientColor=new ComboBox();
         readonly NumericUpDown copies=new NumericUpDown();
         readonly bool needsClientColor;
+        readonly bool companyCode;
 
         public BatchTaskEditDialog(BatchTask task)
         {
             this.task=task;
             needsClientColor=BatchValidation.NeedsClientColorInput(task.Kind,task.Data.ToLabelData());
+            companyCode=task.Kind>=0 && task.Kind<LabelCatalog.Items.Length && LabelCatalog.Items[task.Kind].Layout=="CompanyCodeName";
             Text="タスク編集 — "+task.CustomerName+" / "+task.FormatName;
             Width=480; Height=needsClientColor?360:320; FormBorderStyle=FormBorderStyle.FixedDialog;
             StartPosition=FormStartPosition.CenterParent; MaximizeBox=false; MinimizeBox=false;
@@ -362,7 +372,19 @@ namespace UnifiedLabels
             AddLabel("部署/見出し",y); header.SetBounds(140,y,280,24); header.Text=task.Data.Header; Controls.Add(header); y+=32;
             AddLabel("役職/期生など",y); role.SetBounds(140,y,280,24); role.Text=task.Data.Role; Controls.Add(role); y+=32;
             AddLabel("氏名",y); person.SetBounds(140,y,280,24); person.Text=task.Data.Person; Controls.Add(person); y+=32;
-            AddLabel("番号",y); number.SetBounds(140,y,280,24); number.Text=task.Data.Number; Controls.Add(number); y+=32;
+            AddLabel(companyCode?"番号（3欄）":"番号",y);
+            if(companyCode) {
+                string a,b,c;
+                if(!LabelCatalog.TrySplitCompanyCodeNumber(task.Data.Number, out a, out b, out c)) a=b=c="";
+                AddCodePart(code1,a,140,y);
+                Controls.Add(new Label{Text="-",Left=190,Top=y+2,Width=16,Height=22,TextAlign=ContentAlignment.MiddleCenter});
+                AddCodePart(code2,b,206,y);
+                Controls.Add(new Label{Text="-",Left=256,Top=y+2,Width=16,Height=22,TextAlign=ContentAlignment.MiddleCenter});
+                AddCodePart(code3,c,272,y);
+            } else {
+                number.SetBounds(140,y,280,24); number.Text=task.Data.Number; Controls.Add(number);
+            }
+            y+=32;
             AddLabel("区分（色確認）",y); color.SetBounds(140,y,280,24); color.DropDownStyle=ComboBoxStyle.DropDownList;
             string[] groups=LabelCatalog.ColorGroups(task.Kind);
             if(groups.Length>0) { color.Items.AddRange(groups); color.SelectedItem=task.Data.ColorDepartment; if(color.SelectedIndex<0 && groups.Length>0) color.SelectedIndex=-1; }
@@ -395,7 +417,9 @@ namespace UnifiedLabels
                 task.Data.Header=header.Text.Replace('　',' ');
                 task.Data.Role=role.Text.Replace('　',' ');
                 task.Data.Person=person.Text.Replace('　',' ');
-                task.Data.Number=number.Text.Replace('　',' ');
+                task.Data.Number=companyCode
+                    ? LabelCatalog.JoinCompanyCodeNumber(code1.Text, code2.Text, code3.Text)
+                    : number.Text.Replace('　',' ');
                 if(color.Enabled) task.Data.ColorDepartment=color.SelectedIndex>=0?color.Text:"";
                 task.Copies=(short)copies.Value;
                 string err=BatchValidation.ValidateForTask(task.Kind,task.Data.ToLabelData());
@@ -407,5 +431,22 @@ namespace UnifiedLabels
             Controls.Add(ok); Controls.Add(cancel); CancelButton=cancel;
         }
         void AddLabel(string text,int y) { Controls.Add(new Label { Text=text, Left=16, Top=y+4, Width=120 }); }
+        void AddCodePart(TextBox box, string text, int x, int y) {
+            box.SetBounds(x,y,48,24);
+            box.MaxLength=LabelCatalog.CompanyCodePartMaxLength;
+            box.ImeMode=ImeMode.Disable;
+            box.Text=text??"";
+            box.KeyPress+=delegate(object s, KeyPressEventArgs e) {
+                if(!char.IsControl(e.KeyChar) && (e.KeyChar<'0' || e.KeyChar>'9')) e.Handled=true;
+            };
+            box.TextChanged+=delegate {
+                string clean=LabelCatalog.HalfWidthDigits(box.Text);
+                if(clean==box.Text) return;
+                int caret=box.SelectionStart;
+                box.Text=clean;
+                box.SelectionStart=Math.Min(Math.Max(0,caret), clean.Length);
+            };
+            Controls.Add(box);
+        }
     }
 }

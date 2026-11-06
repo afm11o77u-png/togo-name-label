@@ -233,6 +233,10 @@ namespace UnifiedLabels
         }
         readonly int[] lastFormats=new int[LabelCatalog.Customers.Length];
         readonly TextBox header = new TextBox(), role = new TextBox(), person = new TextBox(), number = new TextBox();
+        // 函館みかど（CompanyCodeName）だけ番号を3欄にする。ハイフンはラベル。保存値は number に「1-3-6」。
+        readonly TextBox numberPart1 = new TextBox(), numberPart2 = new TextBox(), numberPart3 = new TextBox();
+        readonly Label codeHyphen1 = new Label(), codeHyphen2 = new Label();
+        const int CodePartWidth = 60, CodeHyphenWidth = 20;
         readonly Label headerLabel = new Label(), roleLabel = new Label(), status = new Label(), guide = new Label();
         readonly Label smallPlacement = new Label(), largePlacement = new Label(), garmentSummary = new Label();
         readonly Label personLabel = new Label(), numberLabel = new Label(), personSpaceNote = new Label();
@@ -334,6 +338,25 @@ public MainForm(string settingsFile)
             personSpaceNote.ForeColor=Color.FromArgb(80,80,80);
             Field(personSpaceNote,LeftX,PersonNoteTop,300); personSpaceNote.Height=14;
             numberLabel.Text="社員番号（コードに変換する内容）"; Field(numberLabel,LeftX,NumberLabelTop,300); Field(number,LeftX,NumberFieldTop,FieldWidth);
+            numberPart1.MaxLength=numberPart2.MaxLength=numberPart3.MaxLength=LabelCatalog.CompanyCodePartMaxLength;
+            numberPart1.ImeMode=numberPart2.ImeMode=numberPart3.ImeMode=ImeMode.Disable;
+            codeHyphen1.Text=codeHyphen2.Text="-";
+            codeHyphen1.AutoSize=codeHyphen2.AutoSize=false;
+            codeHyphen1.TextAlign=codeHyphen2.TextAlign=ContentAlignment.MiddleCenter;
+            int codeX=LeftX;
+            Field(numberPart1,codeX,NumberFieldTop,CodePartWidth); codeX+=CodePartWidth;
+            Field(codeHyphen1,codeX,NumberFieldTop,CodeHyphenWidth); codeX+=CodeHyphenWidth;
+            Field(numberPart2,codeX,NumberFieldTop,CodePartWidth); codeX+=CodePartWidth;
+            Field(codeHyphen2,codeX,NumberFieldTop,CodeHyphenWidth); codeX+=CodeHyphenWidth;
+            Field(numberPart3,codeX,NumberFieldTop,CodePartWidth);
+            numberPart1.Visible=numberPart2.Visible=numberPart3.Visible=false;
+            codeHyphen1.Visible=codeHyphen2.Visible=false;
+            numberPart1.TextChanged+=OnCompanyCodePartChanged;
+            numberPart2.TextChanged+=OnCompanyCodePartChanged;
+            numberPart3.TextChanged+=OnCompanyCodePartChanged;
+            numberPart1.KeyPress+=DigitOnlyKeyPress;
+            numberPart2.KeyPress+=DigitOnlyKeyPress;
+            numberPart3.KeyPress+=DigitOnlyKeyPress;
             nameOnly.Text="名前のみ（期生の丸数字・社員番号を印字しない）"; Field(nameOnly,LeftX,ExtraRowTop,320); nameOnly.Visible=false;
             SetupFontBox(headerFont, headerFontUnit); SetupFontBox(roleFont, roleFontUnit); SetupFontBox(personFont, personFontUnit); SetupFontBox(numberFont, numberFontUnit);
             headerFont.Top=HeaderFieldTop; headerFontUnit.Top=HeaderFieldTop;
@@ -505,7 +528,13 @@ public MainForm(string settingsFile)
             department.TextChanged += delegate { if(changing || active<0 || department.SelectedIndex>=0) return; UpdateNumberGuide(); Safe(UpdateSample); UpdatePreview(); };
             colorDepartment.TextChanged += delegate { if(changing || active<0 || colorDepartment.SelectedIndex>=0 || colorDepartment.DropDownStyle!=ComboBoxStyle.DropDown) return; UpdateNumberGuide(); Safe(UpdateSample); UpdatePreview(); };
             deptColor.SelectedIndexChanged += delegate { if(changing || deptColorUpdating || active<0) return; UpdateNumberGuide(); Safe(UpdateSample); UpdatePreview(); };
-            foreach (TextBox box in new TextBox[] {header,role,person,number}) box.TextChanged += delegate { if(!changing) { if(active>=0 && (LabelCatalog.Items[active].Layout=="CohortName" || LabelCatalog.Items[active].Layout=="DeptOnly")) {UpdateNumberGuide(); Safe(UpdateSample);} RefreshUnsetFontDefaults(); UpdatePreview(); } };
+            foreach (TextBox box in new TextBox[] {header,role,person}) box.TextChanged += delegate { if(!changing) { if(active>=0 && (LabelCatalog.Items[active].Layout=="CohortName" || LabelCatalog.Items[active].Layout=="DeptOnly")) {UpdateNumberGuide(); Safe(UpdateSample);} RefreshUnsetFontDefaults(); UpdatePreview(); } };
+            number.TextChanged += delegate {
+                if(changing) return;
+                if(active>=0 && LabelCatalog.Items[active].Layout=="CompanyCodeName") SyncCompanyCodePartsFromNumber();
+                if(active>=0 && (LabelCatalog.Items[active].Layout=="CohortName" || LabelCatalog.Items[active].Layout=="DeptOnly")) {UpdateNumberGuide(); Safe(UpdateSample);}
+                RefreshUnsetFontDefaults(); UpdatePreview();
+            };
             nameOnly.CheckedChanged += delegate { if(!changing && active>=0) { drafts[active].NameOnly=nameOnly.Checked; UpdatePreview(); } };
             jobTitle.SelectedIndexChanged += delegate { if(!changing) { if(active>=0) drafts[active].Title=jobTitle.Text??""; UpdatePreview(); } };
             headerFont.ValueChanged += delegate { if(changing || active<0) return; drafts[active].HeaderFontSet=true; drafts[active].HeaderFontPt=(float)headerFont.Value; UpdatePreview(); };
@@ -561,7 +590,7 @@ public MainForm(string settingsFile)
         void BringInputRowsToFront() {
             // ラベル背景が入力欄を覆って潰れて見えるのを防ぐ（会社名行が典型）。
             foreach(Control c in new Control[]{headerLabel,roleLabel,jobTitleLabel,personLabel,numberLabel,deptColorLabel}) c.SendToBack();
-            foreach(Control c in new Control[]{header,role,person,number,department,colorDepartment,deptColor,jobTitle,nameOnly,
+            foreach(Control c in new Control[]{header,role,person,number,numberPart1,codeHyphen1,numberPart2,codeHyphen2,numberPart3,department,colorDepartment,deptColor,jobTitle,nameOnly,
                 headerFont,roleFont,personFont,numberFont,headerFontUnit,roleFontUnit,personFontUnit,numberFontUnit})
                 c.BringToFront();
         }
@@ -632,9 +661,17 @@ public MainForm(string settingsFile)
                 } else y += AfterFieldGap - AfterPersonToNote;
             }
 
-            if(numberLabel.Visible || number.Visible) {
+            if(numberLabel.Visible || number.Visible || numberPart1.Visible) {
                 if(numberLabel.Visible) { numberLabel.Top = y; y += CaptionToField; }
-                if(number.Visible) {
+                if(numberPart1.Visible) {
+                    numberPart1.Top=y; EnsurePreferredHeight(numberPart1);
+                    numberPart2.Top=y; EnsurePreferredHeight(numberPart2);
+                    numberPart3.Top=y; EnsurePreferredHeight(numberPart3);
+                    int h=numberPart1.Height;
+                    codeHyphen1.SetBounds(codeHyphen1.Left,y,codeHyphen1.Width,h);
+                    codeHyphen2.SetBounds(codeHyphen2.Left,y,codeHyphen2.Width,h);
+                    y = numberPart1.Bottom + AfterFieldGap;
+                } else if(number.Visible) {
                     number.Top = y; EnsurePreferredHeight(number);
                     y = number.Bottom + AfterFieldGap;
                 }
@@ -717,12 +754,13 @@ public MainForm(string settingsFile)
             bool showHeader=spec.UsesHeaderFont && (header.Visible || department.Visible) && !colorOnlyHeader;
             bool showRole=spec.UsesRoleFont && role.Visible && !colorOnlyRole;
             bool showPerson=spec.UsesPersonFont && person.Visible;
-            bool showNumber=spec.UsesNumberFont && number.Visible;
+            bool showNumber=spec.UsesNumberFont && (number.Visible || numberPart1.Visible);
             Control headerAnchor=department.Visible?(Control)department:(Control)header;
+            Control numberAnchor=numberPart1.Visible?(Control)numberPart3:(Control)number;
             PlaceFontBox(headerFont, headerFontUnit, headerAnchor, showHeader);
             PlaceFontBox(roleFont, roleFontUnit, role, showRole);
             PlaceFontBox(personFont, personFontUnit, person, showPerson);
-            PlaceFontBox(numberFont, numberFontUnit, number, showNumber);
+            PlaceFontBox(numberFont, numberFontUnit, numberAnchor, showNumber);
             SyncFontBox(headerFont, d.HeaderFontSet, d.HeaderFontPt, LabelCatalog.DefaultHeaderPt(spec,d));
             SyncFontBox(roleFont, d.RoleFontSet, d.RoleFontPt, LabelCatalog.DefaultRolePt(spec));
             SyncFontBox(personFont, d.PersonFontSet, d.PersonFontPt, LabelCatalog.DefaultPersonPt(spec,d));
@@ -791,7 +829,10 @@ public MainForm(string settingsFile)
             if(options.Length>0) { formats.SelectedIndex=matched; lastFormats[spec.Customer]=matched; }
             formats.Enabled=options.Length>1;
             selecting=false;
-            LabelData d=drafts[active]; department.Visible=active==3; header.Visible=active!=3; department.SelectedItem=d.Header; header.Text=d.Header; role.Text=d.Role; person.Text=d.Person; number.Text=d.Number;
+            LabelData d=drafts[active]; department.Visible=active==3; header.Visible=active!=3; department.SelectedItem=d.Header; header.Text=d.Header; role.Text=d.Role; person.Text=d.Person;
+            // 桁数を先に広げてから代入する（函館みかどの「1-23-45」が前形式の MaxLength で切れないように）。
+            number.MaxLength=NumberInputMaxLength(spec, d.Digits==5?5:4);
+            number.Text=d.Number;
             person.MaxLength=spec.Customer==18 || spec.Reading=="ローマ字" || spec.Reading=="半角カタカナ"?100:spec.Layout=="FreeText"?40:20;
             emphasisStart=d.EmphasisStart; emphasisLength=d.EmphasisLength;
             emphasize.Visible=clearEmphasis.Visible=emphasisGuide.Visible=spec.Layout=="MixedName";
@@ -852,12 +893,75 @@ public MainForm(string settingsFile)
             numberLabel.Text=active<4 || spec.Layout=="QR"?"社員番号（コードに変換する内容）":"管理番号（印字する番号）";
             if(spec.NumberLength>0) numberLabel.Text=(spec.Layout=="NumberName" || spec.Layout=="CohortName"?"社員番号":"番号")+"（数字"+spec.NumberLength+"桁"+(spec.OptionalNumber?"・未入力可":"")+"）";
             if(spec.Layout=="PrefixName") numberLabel.Text="丸数字の番号（1～50）";
+            bool companyCode=spec.Layout=="CompanyCodeName";
+            numberPart1.Visible=numberPart2.Visible=numberPart3.Visible=companyCode;
+            codeHyphen1.Visible=codeHyphen2.Visible=companyCode;
+            if(companyCode) {
+                number.Visible=false;
+                numberLabel.Visible=true;
+                numberLabel.Text="番号（第1欄 - 第2欄 - 第3欄）";
+            }
 
             LayoutInputStack(spec);
             UpdateNumberGuide();
             UpdateFontControls();
+            if(companyCode) SyncCompanyCodePartsFromNumber();
             document.DefaultPageSettings.Landscape=active==2 || active==3 || spec.Layout=="QR";
             changing=false; Safe(UpdateSample); Safe(LoadPapers); UpdatePreview();
+        }
+        int NumberInputMaxLength(LabelSpec spec, int yotsubaDigitCount) {
+            if(active<2) return yotsubaDigitCount+1;
+            if(active<4) return LabelRenderer.NumberLimits[active];
+            if(spec.Layout=="QR") return 6;
+            if(spec.Layout=="CompanyCodeName") return LabelCatalog.CompanyCodeNumberMaxLength;
+            if(spec.NumberLength>0) return spec.NumberLength;
+            return 10;
+        }
+        void DigitOnlyKeyPress(object sender, KeyPressEventArgs e) {
+            if(char.IsControl(e.KeyChar)) return;
+            if(e.KeyChar<'0' || e.KeyChar>'9') e.Handled=true;
+        }
+        void OnCompanyCodePartChanged(object sender, EventArgs e) {
+            if(changing) return;
+            TextBox box=sender as TextBox;
+            if(box!=null) {
+                string cleaned=LabelCatalog.HalfWidthDigits(box.Text??"");
+                if(cleaned!=box.Text) {
+                    int caret=box.SelectionStart;
+                    changing=true;
+                    box.Text=cleaned;
+                    box.SelectionStart=Math.Max(0, Math.Min(caret, cleaned.Length));
+                    changing=false;
+                }
+            }
+            if(active<0 || LabelCatalog.Items[active].Layout!="CompanyCodeName") return;
+            changing=true;
+            number.Text=LabelCatalog.JoinCompanyCodeNumber(numberPart1.Text, numberPart2.Text, numberPart3.Text);
+            changing=false;
+            RefreshUnsetFontDefaults();
+            UpdatePreview();
+        }
+        /// <summary>number の文字列を3欄へ反映する。旧5桁は 1-23-45 に直してから表示する。</summary>
+        void SyncCompanyCodePartsFromNumber() {
+            string raw=(number.Text??"").Replace('　',' ').Trim();
+            string a,b,c;
+            bool ok=LabelCatalog.TrySplitCompanyCodeNumber(raw, out a, out b, out c);
+            if(!ok) {
+                a=LabelCatalog.HalfWidthDigits(raw);
+                if(a.Length>LabelCatalog.CompanyCodePartMaxLength) a=a.Substring(0, LabelCatalog.CompanyCodePartMaxLength);
+                b=""; c="";
+            }
+            bool prev=changing;
+            changing=true;
+            try {
+                if(numberPart1.Text!=a) numberPart1.Text=a;
+                if(numberPart2.Text!=b) numberPart2.Text=b;
+                if(numberPart3.Text!=c) numberPart3.Text=c;
+                if(ok) {
+                    string canon=a+"-"+b+"-"+c;
+                    if((number.Text??"")!=canon) number.Text=canon;
+                }
+            } finally { changing=prev; }
         }
         void UpdateNumberGuide()
         {
@@ -865,7 +969,7 @@ public MainForm(string settingsFile)
             UpdateColorLegend();
             Color bandBlue=Color.FromArgb(218,237,255);
             int count=digits.SelectedIndex==1?5:4;
-            number.MaxLength=active<2?count+1:active<4?LabelRenderer.NumberLimits[active]:spec.Layout=="QR"?6:spec.NumberLength>0?spec.NumberLength:10;
+            number.MaxLength=NumberInputMaxLength(spec, count);
             if(active<2 && number.Text.Length>number.MaxLength) number.Text=number.Text.Substring(0,number.MaxLength);
             guide.Text="使用するラベル：白　｜　サイズ："+(active==0?"小（幅50mm・カット長24mm）":"大（幅50mm・カット長80mm）")+(active<2?"\r\nよつ葉のQRコード：Y＋数字"+count+"桁（例："+(count==5?"Y12345":"Y1234")+"／合計"+(count+1)+"文字）":"");
             // 青帯: 形式を選んだら常に詳細な貼り付け先を出す
@@ -1043,6 +1147,7 @@ public MainForm(string settingsFile)
             if(spec.Layout=="SplitCode")example.Person="M-23";
             if(spec.Layout=="FreeText")example.Person=spec.InputCaption.Contains("ファースト")?"タロウ":"M";
             if(spec.NumberLength>0) example.Number="1234567890".Substring(0,spec.NumberLength);
+            if(spec.Layout=="CompanyCodeName") example.Number="1-23-45";
             if(spec.Layout=="PrefixName") example.Number="13";
             if(spec.Layout=="DeptNumberName") example.Header="製造";
             if(spec.Layout=="RoleName" || spec.Layout=="DeptRoleName") example.Role=(spec.Reading=="ローマ字"?"ヤマダ":"主任");
@@ -1537,7 +1642,8 @@ public MainForm(string settingsFile)
                 SelectedCustomerIndex=spec.Customer;
                 int index=Array.IndexOf(LabelCatalog.ForCustomer(spec.Customer),k); formats.SelectedIndex=index;
                 if(active!=k) throw new Exception("追加形式の切替失敗 "+k);
-                if(number.Visible!=spec.NeedsNumber || person.Visible!=spec.NeedsName) throw new Exception("入力欄の切替失敗 "+k);
+                bool numberShown=number.Visible || numberPart1.Visible;
+                if(numberShown!=spec.NeedsNumber || person.Visible!=spec.NeedsName) throw new Exception("入力欄の切替失敗 "+k);
                 if(personFont.Visible!=spec.UsesPersonFont || numberFont.Visible!=spec.UsesNumberFont) throw new Exception("フォントサイズUIの切替失敗 "+k);
                 if(headerFont.Visible && !spec.UsesHeaderFont) throw new Exception("ヘッダーptが不要形式で表示 "+k);
                 if(roleFont.Visible && !spec.UsesRoleFont) throw new Exception("役職ptが不要形式で表示 "+k);
@@ -1704,7 +1810,7 @@ public MainForm(string settingsFile)
             kinds.SelectedIndex=KindForRow(73); colorDepartment.SelectedIndex=0; person.Text=new string('山',20); if(LabelRenderer.Validate(active,Current())==null) throw new Exception("固定文字サイズのはみ出し検証失敗");
             kinds.SelectedIndex=KindForRow(71); person.Text="山田 太郎"; role.Text="主任"; preview.Image.Save(Path.Combine(folder,"role-present.png")); role.Text=""; preview.Image.Save(Path.Combine(folder,"role-absent.png"));
             kinds.SelectedIndex=KindForRow(121); colorDepartment.SelectedIndex=0;person.Text="山田 太郎";if(LabelRenderer.Validate(active,Current())!=null || LabelCatalog.ColorName(active,Current())!="青")throw new Exception("山川牧場の記載済み男性用の検証失敗");
-            kinds.SelectedIndex=KindForRow(129); if(LabelRenderer.Validate(active,Current())==null || person.Visible || number.Visible) throw new Exception("無地ガイド検証失敗");
+            kinds.SelectedIndex=KindForRow(129); if(LabelRenderer.Validate(active,Current())==null || person.Visible || number.Visible || numberPart1.Visible) throw new Exception("無地ガイド検証失敗");
             kinds.SelectedIndex=KindForRow(154); colorDepartment.SelectedIndex=0; person.Text="ヤマダ"; if(LabelRenderer.Validate(active,Current())==null) throw new Exception("上下氏名の区切り検証失敗"); person.Text="ヤマダ タロウ";
             // 色確認専用区分は未選択でも印刷可。選択時は従来色。SizeNumber・必須部署は維持。
             kinds.SelectedIndex=KindForRow(47); person.Text="山田 太郎"; colorDepartment.SelectedIndex=-1;
