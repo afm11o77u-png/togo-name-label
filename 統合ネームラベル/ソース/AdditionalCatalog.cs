@@ -238,6 +238,8 @@ new LabelSpec(132,"大ネーム（苗字・同姓対応）",false,"InitialName",
 new LabelSpec(132,"小ネーム（苗字・同姓対応）",true,"InitialName","HG丸ｺﾞｼｯｸM-PRO","白下：左上／帽子：右耳上","","苗字被りは名前の一文字目をつける",false){HeadingFont=0, MaximumFont=36, SourceRow=123, SurnameOnly=true, Reading="", Groups=new string[]{"白（先方指定）","緑（先方指定）"}, Colors=new string[]{"白","緑"}, ColorCaption="ラベル色", FixedColor=""}, // Excel row 123
 new LabelSpec(133,"小ネーム（フルネーム）",true,"Name","HG丸ｺﾞｼｯｸM-PRO","白衣：左袖25cm","","",true){HeadingFont=0, MaximumFont=0, SourceRow=158, SurnameOnly=false, Reading="", FixedColor="白", Groups=new string[]{}, Colors=new string[]{}}, // Excel row 158
 new LabelSpec(134,"小ネーム（会社名・氏名）",true,"HeadingName","HG丸ｺﾞｼｯｸM-PRO","白衣：左胸／白下：左前／清浄帽：左耳上／準清浄帽：左耳上","日本通運㈱","",false){SourceRow=142, SurnameOnly=false, FixedColor="緑", HeadingFont=18, SettingsIdentity="日本通運|小ネーム（会社名・氏名）|True|白衣：左胸／白下：左前／清浄帽：左耳上／準清浄帽：左耳上", Reading="", Groups=new string[]{}, Colors=new string[]{}, UpperBandMm=12.0f, LowerBandMm=12.0f}, // Excel row 142（日通帯広運輸と同じ見た目）
+// 末尾追加（既存 kind・顧客番号・SettingsIdentity は動かさない）。寸法・貼付・フォントは小川商店の小ネーム（苗字・同姓対応）に合わせ、印字はフルネーム。
+new LabelSpec(60,"小ネーム（実習生用）",true,"Name","MS PGothic","白衣：左胸上(エプロンして隠れない)","","実習生用。入力した氏名は空白で区切った部分も含め、フルネームのまま印字します。",false){SourceRow=260, SurnameOnly=false, MaximumFont=0, ManualLabelColor=true, SamplePerson="ﾘｰ ﾃｨ ﾄｩｲ", ColorGuide="白・青・緑・赤・黄。未選択でも印刷できます。タスクに追加するときは選択が必要です。", SettingsIdentity="小川商店|小ネーム（実習生用）|True|白衣：左胸上(エプロンして隠れない)", Reading="", Groups=new string[]{}, Colors=new string[]{}},
 };}
 }
 }

@@ -31,6 +31,10 @@ namespace UnifiedLabels
         public bool SpaceFurigana;
         /// <summary>カタカナ入力のみ受け付ける（漢字印字なしの案内・検証）。</summary>
         public bool KatakanaOnly;
+        /// <summary>部署なしで常にラベル色（白・青・緑・赤・黄）を選ぶ。未選択でも印刷可。タスク追加時は必須。形式を変えると選択は残さない。</summary>
+        public bool ManualLabelColor;
+        /// <summary>完成見本だけこの氏名にする（空なら従来の山田 太郎等）。入力・印刷には使わない。</summary>
+        public string SamplePerson="";
         /// <summary>顧客選択肢から除外（契約終了・重複統合）。インデックスと SettingsIdentity は維持。</summary>
         public bool HiddenCustomer;
         public float MiddleNudge;
@@ -187,6 +191,11 @@ namespace UnifiedLabels
             string g=SelectedGroup(kind,d)??"";
             return g.Trim()!="" && Array.IndexOf(ColorGroups(kind),g)<0;
         }
+        /// <summary>部署を持たない手動ラベル色（小川商店・実習生用）。一覧にない部署と同じ白・青・緑・赤・黄。</summary>
+        public static readonly string[] ManualLabelColors={"白","青","緑","赤","黄"};
+        public static bool IsManualLabelColor(string color) {
+            return !string.IsNullOrEmpty(color) && Array.IndexOf(ManualLabelColors,color)>=0;
+        }
         /// <summary>アプリ内で使われているラベル色すべて（一覧にない部署の色選択用）。</summary>
         public static string[] AllLabelColors() {
             var found=new List<string>();
@@ -229,6 +238,9 @@ namespace UnifiedLabels
         }
         public static string ColorName(int kind,LabelData d)
         {
+            // 手動ラベル色（部署なし）。未選択は「未指定」（白とは別。印刷は止めない）
+            if(Items[kind].ManualLabelColor)
+                return d!=null && IsManualLabelColor(d.CustomColor)?d.CustomColor:"未指定";
             // 弁釜実習生（期生）：「ラベル色」欄で選んだ色を期生の色より優先
             if(Items[kind].Layout=="CohortName" && d!=null && !string.IsNullOrEmpty(d.CustomColor)) return d.CustomColor;
             if(Items[kind].Layout=="DeptOnly" && Items[kind].FixedColor=="緑？")return d.Header.Replace(" ","").Replace("　","")=="鮮魚"?"緑？":"先方から指定";

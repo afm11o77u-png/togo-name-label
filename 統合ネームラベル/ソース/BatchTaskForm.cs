@@ -142,8 +142,11 @@ namespace UnifiedLabels
             string id=Convert.ToString(row.Cells["id"].Value);
             BatchTask t=store.Find(id);
             if(t==null) return;
-            string color=BatchValidation.NormalizeIssueColor((Convert.ToString(row.Cells["color"].Value)??"").Trim().Replace('　',' '));
-            if(t.ColorGroup==color) { row.Cells["color"].Value=color; return; }
+            string raw=(Convert.ToString(row.Cells["color"].Value)??"").Trim().Replace('　',' ');
+            string color=BatchValidation.NormalizeIssueColor(raw);
+            bool manualColor=t.Kind>=0 && t.Kind<LabelCatalog.Items.Length && LabelCatalog.Items[t.Kind].ManualLabelColor;
+            if(manualColor && LabelCatalog.IsManualLabelColor(raw)) t.Data.CustomColor=raw;
+            if(t.ColorGroup==color && !(manualColor && t.Data.CustomColor==raw)) { row.Cells["color"].Value=color; return; }
             t.ColorGroup=color;
             t.UpdatedAt=DateTime.Now;
             store.Save();
@@ -385,9 +388,14 @@ namespace UnifiedLabels
                 number.SetBounds(140,y,280,24); number.Text=task.Data.Number; Controls.Add(number);
             }
             y+=32;
-            AddLabel("区分（色確認）",y); color.SetBounds(140,y,280,24); color.DropDownStyle=ComboBoxStyle.DropDownList;
+            bool manualColor=task.Kind>=0 && task.Kind<LabelCatalog.Items.Length && LabelCatalog.Items[task.Kind].ManualLabelColor;
+            AddLabel(manualColor?"ラベル色":"区分（色確認）",y); color.SetBounds(140,y,280,24); color.DropDownStyle=ComboBoxStyle.DropDownList;
             string[] groups=LabelCatalog.ColorGroups(task.Kind);
-            if(groups.Length>0) { color.Items.AddRange(groups); color.SelectedItem=task.Data.ColorDepartment; if(color.SelectedIndex<0 && groups.Length>0) color.SelectedIndex=-1; }
+            if(manualColor) {
+                color.Items.AddRange(LabelCatalog.ManualLabelColors);
+                int idx=Array.IndexOf(LabelCatalog.ManualLabelColors, task.Data.CustomColor??"");
+                color.SelectedIndex=idx;
+            } else if(groups.Length>0) { color.Items.AddRange(groups); color.SelectedItem=task.Data.ColorDepartment; if(color.SelectedIndex<0 && groups.Length>0) color.SelectedIndex=-1; }
             else { color.Items.Add("(色選択なし)"); color.SelectedIndex=0; color.Enabled=false; }
             Controls.Add(color); y+=32;
             AddLabel("部数",y); copies.SetBounds(140,y,80,24); copies.Minimum=1; copies.Maximum=30; copies.Value=Math.Max(1,Math.Min(30,(int)task.Copies)); Controls.Add(copies); y+=32;
@@ -420,7 +428,8 @@ namespace UnifiedLabels
                 task.Data.Number=companyCode
                     ? LabelCatalog.JoinCompanyCodeNumber(code1.Text, code2.Text, code3.Text)
                     : number.Text.Replace('　',' ');
-                if(color.Enabled) task.Data.ColorDepartment=color.SelectedIndex>=0?color.Text:"";
+                if(manualColor) task.Data.CustomColor=color.SelectedIndex>=0?color.Text:"";
+                else if(color.Enabled) task.Data.ColorDepartment=color.SelectedIndex>=0?color.Text:"";
                 task.Copies=(short)copies.Value;
                 string err=BatchValidation.ValidateForTask(task.Kind,task.Data.ToLabelData());
                 if(err!=null) { MessageBox.Show(this,err,"入力エラー"); return; }
