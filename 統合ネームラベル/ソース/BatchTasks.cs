@@ -126,6 +126,9 @@ namespace UnifiedLabels
             // 一覧にない部署：印刷は可能だが、タスクにはラベル色の選択が必須
             if(LabelCatalog.IsUnlistedDepartment(kind,d))
                 return string.IsNullOrWhiteSpace(d.CustomColor)?"一覧にない部署です。部署欄の下の「ラベル色」を選択してください。":null;
+            // 手動ラベル色（部署なし）：印刷は未選択でも可。タスク追加時だけ必須
+            if(s.ManualLabelColor && !LabelCatalog.IsManualLabelColor(d.CustomColor))
+                return "ラベル色を選択してください。タスクに追加するには、名前の上の「ラベル色」で白・青・緑・赤・黄のいずれかを選んでください。";
             string[] groups=LabelCatalog.ColorGroups(kind);
             if(groups.Length>0 && !LabelCatalog.ColorGroupAffectsPrint(kind)) {
                 if(Array.IndexOf(groups,LabelCatalog.SelectedGroup(kind,d))<0)
@@ -697,6 +700,8 @@ namespace UnifiedLabels
                         Header=dept, Role=roleValue, Title=title, Person=person, Number=number,
                         ColorDepartment=group, Digits=4
                     };
+                    // 手動ラベル色の形式は「区分」列の白・青・緑・赤・黄をラベル色として使う（部署は不要）
+                    if(importSpec.ManualLabelColor && LabelCatalog.IsManualLabelColor(group)) d.CustomColor=group;
                     if(kind<2 && !string.IsNullOrEmpty(number) && number.Length>=6) d.Digits=5;
                     string err=BatchValidation.ValidateForTask(kind,d);
                     if(err!=null) { result.Errors.Add("行"+displayRow+"・項目検証: "+err); continue; }

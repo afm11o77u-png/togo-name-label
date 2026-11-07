@@ -16,7 +16,7 @@ namespace UnifiedLabels
         public string Header = "", Role = "", Person = "", Number = "";
         /// <summary>部署横に併記する任意役職（ふりがな用 Role とは別。明日佳・東苗穂など）。</summary>
         public string Title = "";
-        /// <summary>一覧にない部署を入力したときに選んだラベル色（タスク用）。一覧の部署では空。</summary>
+        /// <summary>一覧にない部署、または手動ラベル色の形式で選んだラベル色（タスク用）。未選択は空。</summary>
         public string CustomColor = "";
         // 欄ごとのフォントサイズ(pt)。*FontSet=false または無効値ならカタログ／自動調整の既定を使う。
         public float HeaderFontPt, RoleFontPt, PersonFontPt, NumberFontPt;
@@ -154,6 +154,8 @@ namespace UnifiedLabels
         readonly ComboBox deptColor = new ComboBox();
         bool deptColorUpdating;
         string deptColorFor = "";
+        /// <summary>ラベル色コンボの中身（cohort / manual / dept / 空）。形式が変わるまで選び直さない。</summary>
+        string deptColorMode = "";
         int clientColorSlot;
         // 色帯は最大6枚（3行×2列）。鱗幸など赤・緑・青・白・黄の5色凡例を表示するため4枚から拡張。
         readonly Label[] colorLegend = {new Label(),new Label(),new Label(),new Label(),new Label(),new Label()};
@@ -692,19 +694,29 @@ public MainForm(string settingsFile)
             deptColor.Top = y; EnsurePreferredHeight(deptColor);
             return deptColor.Bottom + AfterFieldGap;
         }
-        /// <summary>部署が一覧にないときだけラベル色欄を出す。部署の入力が変わったら選択は毎回クリア（記憶しない）。</summary>
+        /// <summary>部署が一覧にないとき、期生のとき、手動ラベル色の形式のときラベル色欄を出す。入力の切り替わりでは選択を残さない。</summary>
         void UpdateDeptColorField() {
             if(deptColorUpdating) return;
             deptColorUpdating=true;
             try {
                 LabelData d=active>=0?Current():null;
+                LabelSpec spec=d!=null?LabelCatalog.Items[active]:null;
                 // 弁釜実習生（期生）は常に表示。先頭の空欄＝期生の色。期生を変えたらその期生の色に自動で合わせる（記憶しない）。
-                bool cohort=d!=null && LabelCatalog.Items[active].Layout=="CohortName";
-                bool show=d!=null && (cohort || LabelCatalog.IsUnlistedDepartment(active,d));
-                bool hasBlank=deptColor.Items.Count>0 && (deptColor.Items[0] as string)=="";
-                if(cohort && !hasBlank) deptColor.Items.Insert(0,""); else if(!cohort && hasBlank) deptColor.Items.RemoveAt(0);
-                deptColorLabel.Text=cohort?"ラベル色（期生で自動・変更すると優先）":"ラベル色（一覧にない部署・タスク追加時に必要）";
-                int cn; string key=!show?"":cohort?active+"|期生|"+(LabelCatalog.TryCohort(d.Role,out cn)?cn.ToString():""):active+"|"+LabelCatalog.SelectedGroup(active,d);
+                bool cohort=spec!=null && spec.Layout=="CohortName";
+                // 小川商店・実習生用など。部署は不要で、形式を選んでいるあいだ常に出す。
+                bool manual=spec!=null && spec.ManualLabelColor;
+                bool show=d!=null && (cohort || manual || LabelCatalog.IsUnlistedDepartment(active,d));
+                string mode=!show?"":cohort?"cohort":manual?"manual":"dept";
+                if(mode!=deptColorMode) {
+                    deptColorMode=mode;
+                    deptColor.Items.Clear();
+                    if(cohort) deptColor.Items.Add("");
+                    if(manual) deptColor.Items.AddRange(LabelCatalog.ManualLabelColors);
+                    else if(show || cohort) deptColor.Items.AddRange(LabelCatalog.AllLabelColors());
+                    deptColorFor="";
+                }
+                deptColorLabel.Text=cohort?"ラベル色（期生で自動・変更すると優先）":manual?"ラベル色（タスク追加時に必要）":"ラベル色（一覧にない部署・タスク追加時に必要）";
+                int cn; string key=!show?"":cohort?active+"|期生|"+(LabelCatalog.TryCohort(d.Role,out cn)?cn.ToString():""):manual?active+"|手動色":active+"|"+LabelCatalog.SelectedGroup(active,d);
                 if(key!=deptColorFor) {
                     deptColor.SelectedIndex=-1; deptColorFor=key;
                     if(cohort) { int i=deptColor.Items.IndexOf(LabelCatalog.ColorName(active,new LabelData{Role=d.Role})); deptColor.SelectedIndex=i>0?i:0; }
@@ -833,7 +845,7 @@ public MainForm(string settingsFile)
             // 桁数を先に広げてから代入する（函館みかどの「1-23-45」が前形式の MaxLength で切れないように）。
             number.MaxLength=NumberInputMaxLength(spec, d.Digits==5?5:4);
             number.Text=d.Number;
-            person.MaxLength=spec.Customer==18 || spec.Reading=="ローマ字" || spec.Reading=="半角カタカナ"?100:spec.Layout=="FreeText"?40:20;
+            person.MaxLength=spec.ManualLabelColor || spec.Customer==18 || spec.Reading=="ローマ字" || spec.Reading=="半角カタカナ"?100:spec.Layout=="FreeText"?40:20;
             emphasisStart=d.EmphasisStart; emphasisLength=d.EmphasisLength;
             emphasize.Visible=clearEmphasis.Visible=emphasisGuide.Visible=spec.Layout=="MixedName";
             UpdateEmphasisGuide();
@@ -877,7 +889,7 @@ public MainForm(string settingsFile)
             colorDepartment.Visible=groups.Length>0 && spec.Layout!="CohortName" && !spec.ColorFromDepartment; colorDepartment.SelectedItem=d.ColorDepartment;
             if(freeColorDept && colorDepartment.SelectedIndex<0) colorDepartment.Text=d.ColorDepartment??"";
             // 形式を切り替えたら、一覧にない部署のラベル色は選び直し（記憶しない）
-            deptColorUpdating=true; deptColor.SelectedIndex=-1; deptColor.Visible=deptColorLabel.Visible=false; deptColorFor=""; deptColorUpdating=false;
+            deptColorUpdating=true; deptColor.SelectedIndex=-1; deptColor.Visible=deptColorLabel.Visible=false; deptColorFor=""; deptColorMode=""; deptColorUpdating=false;
             if(groups.Length>0 && spec.Layout!="CohortName" && !spec.ColorFromDepartment) {
                 string caption=spec.ColorCaption+"（ラベル色）";
                 // OptionalHeading は上段自由入力を残し、色選択だけ役職行へ出す（鱗幸など）。
@@ -1154,6 +1166,8 @@ public MainForm(string settingsFile)
             if(spec.Layout=="InitialName" || spec.Layout=="InitialMixed") example.Role="太";
             if(spec.Layout=="CohortName") example.Role=role.Text==""?"1":role.Text;
             if(spec.Layout=="SizeNumber") { example.ColorDepartment=colorDepartment.Text==""?"M":colorDepartment.Text; example.Header=header.Text==""?"10L":header.Text; example.Number="60"; }
+            // 形式ごとの完成見本だけ差し替える（他形式の山田 太郎等はそのまま）
+            if(!string.IsNullOrEmpty(spec.SamplePerson)) example.Person=spec.SamplePerson;
             Size size=LabelCatalog.Millimetres(active);
             Bitmap bitmap=new Bitmap(size.Width*6,size.Height*6);
             try { using(Graphics g=Graphics.FromImage(bitmap)) { g.Clear(LabelCatalog.Swatch(colorName)); g.ScaleTransform(6*0.254f,6*0.254f); LabelRenderer.Draw(g,active,example); } }
@@ -1790,7 +1804,7 @@ public MainForm(string settingsFile)
             Hide(); File.WriteAllText(Path.Combine(folder,"verification.txt"),"PASS: long placement wraps without overlap; color and cohort guides; fixed-font notice; changing formats restores original window height. No print job sent.",Encoding.UTF8);
         }
         void VerifyBulkAdditions(string folder) {
-            if(LabelCatalog.Items.Length!=234 || LabelCatalog.Customers.Length!=135 || LabelCatalog.VisibleCustomerCount()!=131) throw new Exception("登録件数不一致 "+LabelCatalog.Items.Length+"/"+LabelCatalog.Customers.Length+"/"+LabelCatalog.VisibleCustomerCount());
+            if(LabelCatalog.Items.Length!=235 || LabelCatalog.Customers.Length!=135 || LabelCatalog.VisibleCustomerCount()!=131) throw new Exception("登録件数不一致 "+LabelCatalog.Items.Length+"/"+LabelCatalog.Customers.Length+"/"+LabelCatalog.VisibleCustomerCount());
             foreach(int row in new int[]{45,46,74,108+1,132+1}) {
                 kinds.SelectedIndex=KindForRow(row); department.SelectedIndex=0;
                 if(LabelCatalog.ColorGroups(active).Length>0) { colorDepartment.SelectedIndex=1; if(colorDepartment.Bounds.IntersectsWith(department.Bounds)) throw new Exception("部署と色の入力欄が重なっています"); }
@@ -1826,7 +1840,7 @@ public MainForm(string settingsFile)
             department.SelectedIndex=0; if(LabelRenderer.Validate(active,Current())!=null) throw new Exception("部署入力後も色未選択で印刷できない");
             colorDepartment.SelectedIndex=1; if(LabelCatalog.ColorName(active,Current())!="赤") throw new Exception("性別選択時の色検証失敗");
             using(Bitmap b=new Bitmap(Width,Height)) { DrawToBitmap(b,new Rectangle(0,0,Width,Height)); b.Save(Path.Combine(folder,"window-bulk.png")); }
-            File.WriteAllText(Path.Combine(folder,"bulk-verification.txt"),"PASS: 131 visible customers / 234 formats (catalog slots 135); independent department and color controls; distinct color rules retain selections; numeric lengths including leading zero; cohort colors 1..12; invalid cohorts; circled numbers; fixed font overflow; optional role; blank label; specified male color; two-row surname/given name; optional color-only groups; required print size/department.",Encoding.UTF8);
+            File.WriteAllText(Path.Combine(folder,"bulk-verification.txt"),"PASS: 131 visible customers / 235 formats (catalog slots 135); independent department and color controls; distinct color rules retain selections; numeric lengths including leading zero; cohort colors 1..12; invalid cohorts; circled numbers; fixed font overflow; optional role; blank label; specified male color; two-row surname/given name; optional color-only groups; required print size/department.",Encoding.UTF8);
         }
     }
     static class Program
